@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
+import { verifyCheckoutHmac } from '@/lib/hmac';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-04-10',
 });
 
-// Map Stripe events to Remotion compositions with version routing
-// Format: "event.type" → "CompositionName" (defaults to latest version)
-// To pin a version: "event.type:v2" → "CompositionName:v2"
+// Map Stripe events to Remotion compositions
 const STRIPE_EVENT_MAP: Record<string, string> = {
   'checkout.session.completed': 'ThankYouVideo',
   'customer.subscription.created': 'WelcomeVideo',
@@ -17,8 +16,7 @@ const STRIPE_EVENT_MAP: Record<string, string> = {
   'invoice.payment_succeeded': 'ReceiptVideo',
 };
 
-// Version pinning — explicit version overrides
-// When a webhook sends X-Composition-Version header, it overrides default
+// Explicit version pinning via X-Composition-Version header
 const VERSION_OVERRIDES: Record<string, Record<string, string>> = {
   'checkout.session.completed': {
     '1': 'ThankYouVideo:v1',
@@ -82,19 +80,15 @@ function extractPropsFromSession(session: StripeSession): Record<string, unknown
     purchaseDate,
     brandColor: session.metadata?.brand_color || '#ff0055',
     orderId: session.id,
-    // Custom fields from metadata
     customHeadline: session.metadata?.headline,
     customMessage: session.metadata?.message,
   };
 }
 
 function resolveComposition(eventType: string, versionHeader?: string | null): string | null {
-  // Check explicit version override from header
   if (versionHeader && VERSION_OVERRIDES[eventType]?.[versionHeader]) {
     return VERSION_OVERRIDES[eventType][versionHeader];
   }
-
-  // Check metadata-based version pinning (X-Composition-Version)
   return STRIPE_EVENT_MAP[eventType] || null;
 }
 
@@ -106,7 +100,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
   }
 
-  // Verify Stripe webhook signature
+  // ── Layer 1: Verify Stripe webhook signature ──
+  // Confirms the payload came from Stripe, not from a random HTTP client.
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(
@@ -116,7 +111,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`Stripe signature verification failed: ${message}`);
+    console.error(`[Stripe] Signature verification failed: ${message}`);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -126,7 +121,7 @@ export async function POST(req: NextRequest) {
   const composition = resolveComposition(eventType, versionHeader);
 
   if (!composition) {
-    console.log(`Unhandled Stripe event: ${eventType}`);
+    console.log(`[Stripe] Unhandled event: ${eventType}`);
     return NextResponse.json({ received: true, action: 'ignored' });
   }
 
@@ -134,13 +129,27 @@ export async function POST(req: NextRequest) {
   let props: Record<string, unknown>;
   try {
     if (eventType === 'checkout.session.completed') {
-      props = extractPropsFromSession(event.data.object as unknown as StripeSession);
+      const session = event.data.object as unknown as StripeSession;
+
+      // ── Layer 2: Per-checkout HMAC verification ──
+      // Confirms this checkout was initiated by our server (not replayed or forged).
+      // HMAC is generated server-side when creating the Stripe checkout session
+      // and stored in session metadata as "render_hmac".
+      const renderHmac = session.metadata?.render_hmac;
+      if (!verifyCheckoutHmac(session.id, renderHmac)) {
+        console.error(`[Stripe] HMAC verification failed for session ${session.id}`);
+        return NextResponse.json(
+          { error: 'HMAC verification failed — unauthorized checkout' },
+          { status: 403 }
+        );
+      }
+
+      props = extractPropsFromSession(session);
     } else {
-      // Generic extraction for other events
       props = event.data.object as Record<string, unknown>;
     }
   } catch (err) {
-    console.error(`Failed to extract props from ${eventType}:`, err);
+    console.error(`[Stripe] Failed to extract props from ${eventType}:`, err);
     return NextResponse.json({ error: 'Failed to extract props' }, { status: 500 });
   }
 

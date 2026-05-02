@@ -8,7 +8,9 @@
     "start": "next start",
     "worker": "tsx src/worker.ts",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "deploy:lambda": "bash scripts/deploy-lambda.sh",
+    "deploy:lambda:unsafe": "bash scripts/deploy-lambda.sh --skip-tests"
   },
   "dependencies": {
     "next": "^14.0.0",

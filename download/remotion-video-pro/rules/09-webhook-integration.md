@@ -279,22 +279,80 @@ export async function startLambdaRender(data: {
 
 ## Wiring External Services
 
-### Stripe Checkout
+### Stripe Checkout (with HMAC verification)
 
-```bash
-# In Stripe dashboard, set webhook endpoint to:
-https://your-service.com/api/render
+The Stripe webhook endpoint uses two-layer security:
+1. **Stripe signature** — confirms payload came from Stripe
+2. **Per-checkout HMAC** — confirms we initiated this specific checkout
 
-# Stripe sends:
-{
-  "event": "order.completed",
-  "data": {
-    "customerName": "Alice",
-    "productName": "Pro Plan",
-    "purchaseDate": "2026-05-03"
-  }
+When creating a checkout session, embed an HMAC in the metadata:
+
+```ts
+import { createCheckout } from '@/lib/stripe-checkout';
+
+const session = await createCheckout({
+  mode: 'payment',
+  line_items: [{ price: 'price_xxx', quantity: 1 }],
+  success_url: 'https://yoursite.com/success',
+  cancel_url: 'https://yoursite.com/cancel',
+  metadata: {
+    brand_color: '#ff0055',
+    customer_name: 'Alice',
+  },
+});
+
+// The HMAC is automatically embedded in session.metadata.render_hmac
+// Redirect user to session.url
+```
+
+When the webhook fires, the HMAC is verified before any render is triggered:
+
+```ts
+// Inside /api/stripe-webhook:
+const renderHmac = session.metadata?.render_hmac;
+if (!verifyCheckoutHmac(session.id, renderHmac)) {
+  return NextResponse.json({ error: 'HMAC verification failed' }, { status: 403 });
 }
 ```
+
+This prevents replay attacks — even if an attacker replays a valid Stripe webhook payload, they can't forge the HMAC because `CHECKOUT_HMAC_SECRET` never leaves the server.
+
+**Stripe Dashboard setup:**
+1. Webhook URL: `https://your-service.com/api/stripe-webhook`
+2. Events: `checkout.session.completed`
+3. Copy signing secret → set as `STRIPE_WEBHOOK_SECRET`
+
+### Composition Version Activation
+
+Deploy new composition versions without breaking production. Register a version, test it, then activate it with a single API call:
+
+```bash
+# 1. Register a new version (inactive — won't receive webhooks)
+curl -X PUT https://your-service.com/api/composition/activate \
+  -H "x-admin-secret: your-admin-secret" \
+  -d '{
+    "composition": "ThankYouVideo",
+    "version": "v3",
+    "description": "New scene order with gradient backgrounds"
+  }'
+
+# 2. Test the new version manually via Lambda
+npx remotion lambda render ThankYouVideo:v3 --concurrency=1
+
+# 3. Activate it (all future webhooks route to v3)
+curl -X POST https://your-service.com/api/composition/activate \
+  -H "x-admin-secret: your-admin-secret" \
+  -d '{
+    "composition": "ThankYouVideo",
+    "version": "v3"
+  }'
+
+# 4. List all versions (for audit)
+curl https://your-service.com/api/composition/activate \
+  -H "x-admin-secret: your-admin-secret"
+```
+
+The activation endpoint atomically deactivates all other versions and activates the target — no race conditions, no downtime.
 
 ### Custom CRM Webhook
 
@@ -323,4 +381,9 @@ REMOTION_AWS_REGION=us-east-1
 REMOTION_SERVE_URL=https://your-site.s3.amazonaws.com/index.html
 REMOTION_FUNCTION_NAME=remotion-render-fn
 WEBHOOK_SECRET=your-webhook-secret
+ADMIN_SECRET=your-admin-secret
+STRIPE_SECRET_KEY=sk_live_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+CHECKOUT_HMAC_SECRET=your-random-64-char-hex-string
+WORKER_CONCURRENCY=5
 ```

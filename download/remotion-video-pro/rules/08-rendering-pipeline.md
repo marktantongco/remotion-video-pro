@@ -115,6 +115,47 @@ npx remotion lambda sites create src/index.ts
 npx remotion lambda render MyVideo --concurrency=100
 ```
 
+### Lambda Deployment with Test Gate
+
+Never deploy a broken composition to Lambda. The test harness runs automatically before site creation, blocking broken code from reaching production.
+
+**Using the deployment script:**
+```bash
+# Full deploy: validate → test → bundle → deploy
+npm run deploy:lambda
+
+# Emergency deploy (skip tests — use sparingly)
+npm run deploy:lambda:unsafe
+
+# Deploy only Lambda functions (no site update)
+npm run deploy:lambda -- --functions-only
+
+# Deploy only serve site (no function update)
+npm run deploy:lambda -- --site-only
+```
+
+**The script does this in order:**
+1. Run `scripts/validate-composition.ts` (catches the 7 deadly sins)
+2. Run `npm test` (pattern compliance + structure + frame integrity)
+3. Verify `npx remotion bundle` succeeds
+4. Deploy Lambda functions
+5. Create/update serve site
+
+**CI pipeline integration:**
+```yaml
+validate-lambda:
+  needs: [typecheck, lint, validate-composition]
+  steps:
+    - run: npm test
+    - run: npx remotion bundle src/index.ts --out-dir out/bundle
+
+deploy-lambda:
+  needs: validate-lambda
+  steps:
+    - run: npx remotion lambda functions deploy
+    - run: npx remotion lambda sites create src/index.ts
+```
+
 ### Security & Cost Guards
 
 ```ts

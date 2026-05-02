@@ -71,8 +71,10 @@ This skill owns **everything** needed to produce programmatic video with Remotio
 6. **Zod Every Composition.** Runtime validation prevents render crashes from bad props.
 7. **React.memo Every Scene.** Unnecessary re-renders cost render time and money on Lambda.
 8. **Validate Before Commit.** The pre-commit hook catches all 7 deadly sins. Never disable it.
-9. **Video is a Database Row.** Personalized video at scale means treating renders as data pipeline output.
-10. **Anti-Slop or Nothing.** Default Inter, purple gradients, and emoji icons are forbidden. Period.
+9. **Test Before Deploy.** The test harness runs before Lambda site creation. Broken compositions never reach Lambda.
+10. **Video is a Database Row.** Personalized video at scale means treating renders as data pipeline output.
+11. **Anti-Slop or Nothing.** Default Inter, purple gradients, and emoji icons are forbidden. Period.
+12. **Version Your Compositions.** Deploy v2, test it, activate it. Old webhooks render old versions. Never break production.
 
 ## Decision Tree
 

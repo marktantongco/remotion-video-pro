@@ -49,7 +49,7 @@ jobs:
       - run: npx prisma generate
       - run: npm run build
 
-  # ── Gate 4: Render validation (if Remotion project is co-located) ──
+  # ── Gate 4: Composition validation ──
   validate-composition:
     runs-on: ubuntu-latest
     steps:
@@ -67,7 +67,58 @@ jobs:
             echo "No validator found — skipping composition check"
           fi
 
-  # ── Deploy to Railway (main branch only) ──
+  # ── Gate 5: Remotion bundle + test harness (before Lambda deploy) ──
+  validate-lambda:
+    needs: [typecheck, lint, validate-composition]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Run test harness
+        run: |
+          if [ -f "package.json" ] && grep -q '"test"' package.json; then
+            npm test
+          fi
+      - name: Verify Remotion bundle
+        run: |
+          npx remotion bundle src/index.ts --out-dir out/bundle
+          echo "Bundle successful"
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remotion-bundle
+          path: out/bundle
+          retention-days: 1
+
+  # ── Deploy Lambda (main only, after all gates pass) ──
+  deploy-lambda:
+    needs: validate-lambda
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Deploy Lambda functions
+        run: npx remotion lambda functions deploy
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+          REMOTION_AWS_REGION: ${{ secrets.REMOTION_AWS_REGION || 'us-east-1' }}
+      - name: Create Lambda serve site
+        run: npx remotion lambda sites create src/index.ts
+        env:
+          REMOTION_AWS_ACCESS_KEY_ID: ${{ secrets.REMOTION_AWS_ACCESS_KEY_ID }}
+          REMOTION_AWS_SECRET_ACCESS_KEY: ${{ secrets.REMOTION_AWS_SECRET_ACCESS_KEY }}
+          REMOTION_AWS_REGION: ${{ secrets.REMOTION_AWS_REGION || 'us-east-1' }}
+
+  # ── Deploy to Railway (main only, after all gates pass) ──
   deploy-api:
     needs: [build, validate-composition]
     runs-on: ubuntu-latest
