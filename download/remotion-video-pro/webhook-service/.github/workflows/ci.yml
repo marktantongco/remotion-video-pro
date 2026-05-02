@@ -1,0 +1,93 @@
+name: CI — Validate, Build, Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Gate 1: TypeScript type check ──
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  # ── Gate 2: Lint / security scan ──
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Check for secrets in code
+        run: |
+          if rg -l '(SK|sk)_live_|(SK|sk)_test_|whsec_|xk_live_' src/ --type ts --type tsx; then
+            echo "ERROR: Potential Stripe/Remotion secrets found in source code"
+            exit 1
+          fi
+          echo "No secrets detected"
+
+  # ── Gate 3: Build check ──
+  build:
+    needs: [typecheck, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run build
+
+  # ── Gate 4: Render validation (if Remotion project is co-located) ──
+  validate-composition:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Run composition validator
+        run: |
+          if [ -f "scripts/validate-composition.ts" ]; then
+            npx tsx scripts/validate-composition.ts
+            echo "Composition validation passed"
+          else
+            echo "No validator found — skipping composition check"
+          fi
+
+  # ── Deploy to Railway (main branch only) ──
+  deploy-api:
+    needs: [build, validate-composition]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger Railway API deploy
+        run: |
+          curl -X POST "${{ secrets.RAILWAY_WEBHOOK_URL_API }}" \
+            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+            -H "Content-Type: application/json"
+
+  deploy-worker:
+    needs: [build, validate-composition]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger Railway Worker deploy
+        run: |
+          curl -X POST "${{ secrets.RAILWAY_WEBHOOK_URL_WORKER }}" \
+            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+            -H "Content-Type: application/json"

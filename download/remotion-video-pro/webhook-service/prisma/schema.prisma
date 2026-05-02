@@ -10,15 +10,32 @@ datasource db {
 model RenderJob {
   id          String   @id @default(cuid())
   composition String
+  version     String?  // Optional version tag (e.g., "v1", "v2")
   props       Json
-  status      String   @default("pending")
+  status      String   @default("pending") // pending, rendering, done, failed
   progress    Float    @default(0)
   outputUrl   String?
   error       String?
-  webhookUrl  String?
+  webhookUrl  String?  // Callback URL when render completes
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([status])
   @@index([createdAt])
+  @@index([composition, version])
+}
+
+// Composition version registry
+// Tracks which version of each composition is "active"
+// Old webhooks continue routing to their pinned version
+model CompositionVersion {
+  id          String   @id @default(cuid())
+  composition String   // e.g., "ThankYouVideo"
+  version     String   // e.g., "v1", "v2"
+  isActive    Boolean  @default(true)
+  deployedAt  DateTime @default(now())
+  description String?  // Human-readable changelog
+
+  @@unique([composition, version])
+  @@index([composition, isActive])
 }

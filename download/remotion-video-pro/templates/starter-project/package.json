@@ -8,6 +8,10 @@
     "render": "remotion render",
     "still": "remotion still",
     "validate": "npx tsx scripts/validate-composition.ts",
+    "test": "npx tsx tests/run-all.ts",
+    "test:patterns": "npx tsx tests/pattern-compliance.ts",
+    "test:structure": "npx tsx tests/project-structure.ts",
+    "test:frames": "npx tsx tests/frame-integrity.ts",
     "prepare": "husky"
   },
   "dependencies": {

@@ -260,3 +260,55 @@ const calculateMetadata = calculateMetadata(async ({ props }) => {
   return { props: parsed, /* ... */ };
 });
 ```
+
+## Test Harness
+
+The starter project includes an automated test suite that validates every skill rule against the codebase. Run it before every commit:
+
+```bash
+# Run all tests
+npm test
+
+# Run individual suites
+npm run test:patterns     # Validates Rules 01, 02, 06, 11 (no sins)
+npm run test:structure    # Validates project layout conventions
+npm run test:frames       # Renders key frames, checks for blank/corrupt output
+```
+
+### What the Test Harness Checks
+
+**Pattern Compliance (`tests/pattern-compliance.ts`):**
+- No `Math.random()` in any source file
+- No `setTimeout`, `setInterval`, `requestAnimationFrame`
+- No CSS `@keyframes`, `animation`, or `transition` properties
+- Uses `spring()` or `interpolate()` for motion
+- All scene components wrapped in `React.memo`
+- No `<Video>` tag (must use `OffthreadVideo`)
+- No `.mp4` imports (must use `staticFile()`)
+- Named imports from `remotion` (no namespace imports)
+- `delayRender` always paired with `continueRender`
+- Zod schema present in `Root.tsx`
+- `calculateMetadata` used in `Root.tsx`
+- `validate-composition.ts` exists in `scripts/`
+
+**Project Structure (`tests/project-structure.ts`):**
+- `tsconfig.json` has `strict: true`
+- `src/scenes/` directory exists with at least one scene
+- `scripts/` and `public/data/` directories exist
+- `package.json` has `validate` and `test` scripts
+- Husky pre-commit hook configured
+- No `.mp4` files in `src/` (must be in `public/`)
+
+**Frame Integrity (`tests/frame-integrity.ts`):**
+- Renders key frames at 25% scale
+- Checks output file size (blank frames are suspiciously small)
+- Verifies first frame is not black (common audio preload bug)
+
+### Add Tests to CI
+
+Include `npm test` in your CI pipeline alongside `npm run validate`:
+
+```yaml
+- run: npm run validate   # Static analysis (no sins)
+- run: npm test           # Full test suite (structure + patterns + frames)
+```
