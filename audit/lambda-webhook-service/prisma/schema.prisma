@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model RenderJob {
+  id          String   @id @default(cuid())
+  composition String
+  props       Json
+  status      String   @default("pending") // pending, rendering, done, failed
+  progress    Float    @default(0)
+  outputUrl   String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

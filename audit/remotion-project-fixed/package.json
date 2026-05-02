@@ -1,0 +1,28 @@
+{
+  "name": "remotion-project",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "render": "remotion render",
+    "validate": "node scripts/validate-composition.js",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "remotion": "4.0.0",
+    "zod": "^3.22.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "@types/react": "^18.2.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "node scripts/validate-composition.js",
+      "git add"
+    ]
+  }
+}
