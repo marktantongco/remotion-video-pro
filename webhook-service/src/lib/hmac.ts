@@ -67,7 +67,7 @@ export function verifyCheckoutHmac(
       return false;
     }
 
-    return crypto.timingSafeEqual(expectedBuf, providedBuf);
+    return require('crypto').timingSafeEqual(expectedBuf, providedBuf);
   } catch {
     return false;
   }

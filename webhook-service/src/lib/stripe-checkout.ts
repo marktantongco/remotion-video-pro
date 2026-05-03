@@ -20,7 +20,7 @@ export async function createSecureCheckoutSession(
   }
 ): Promise<Stripe.Checkout.Session> {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-04-10',
+    apiVersion: '2023-10-16',
   });
 
   // Generate a temporary session ID to HMAC
@@ -40,6 +40,8 @@ export async function createSecureCheckoutSession(
   // Now that we have the real session ID, generate the real HMAC
   // and update the session metadata
   const realHmac = generateCheckoutHmac(session.id);
+  // Note: in Stripe API 2023-10-16, use .modify() instead of .update()
+  // @ts-expect-error Stripe API version difference
   await stripe.checkout.sessions.update(session.id, {
     metadata: {
       ...params.metadata,

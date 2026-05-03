@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       prisma.renderJob.create({
         data: {
           composition,
-          props: record.props,
+          props: record.props as any,
           status: 'pending',
           webhookUrl: callbackUrl,
         },

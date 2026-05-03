@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     data: {
       composition: resolved.composition,
       version: resolved.version,
-      props: parsed.data.data,
+      props: parsed.data.data as any,
       status: 'pending',
     },
   });

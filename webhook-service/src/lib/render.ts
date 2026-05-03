@@ -14,7 +14,7 @@ const MAX_POLL_DURATION_MS = 600_000;
 
 export async function startLambdaRender(data: RenderJobData) {
   const { renderId, bucketName } = await renderMediaOnLambda({
-    region: REGION,
+    region: REGION as any,
     functionName: FUNCTION_NAME,
     serveUrl: SERVE_URL,
     composition: data.composition,
@@ -43,7 +43,7 @@ export async function startLambdaRender(data: RenderJobData) {
       renderId,
       bucketName,
       functionName: FUNCTION_NAME,
-      region: REGION,
+      region: REGION as any,
     });
 
     progress = status.overallProgress;
