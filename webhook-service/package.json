@@ -13,7 +13,7 @@
     "deploy:lambda:unsafe": "bash scripts/deploy-lambda.sh --skip-tests"
   },
   "dependencies": {
-    "next": "^14.0.0",
+    "next": "^16.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "@remotion/lambda": "4.0.0",
