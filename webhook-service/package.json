@@ -6,7 +6,7 @@
   "description": "Video Personalization Engine — Programmatic video rendering API with A/B testing, Stripe integration, and real-time personalization.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npx prisma generate && next build",
     "start": "next start",
     "worker": "tsx src/worker.ts",
     "db:push": "prisma db push",
