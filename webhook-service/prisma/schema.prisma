@@ -21,7 +21,7 @@ model RenderJob {
   updatedAt      DateTime @updatedAt
 
   // A/B testing fields
-  abTestId       String?  // A/B test cohort ID
+  abTestId       String?  @unique // A/B test cohort ID (FK to ABTest)
   abVariant      String?  // "control" or "treatment"
   stripeMetadata Json?    // Raw Stripe metadata for analytics
   videoVersion   String?  // Track which composition version was rendered
@@ -29,6 +29,7 @@ model RenderJob {
 
   // Relations
   analytics      RenderAnalytics[]
+  abTest         ABTest?          @relation("ABTestJobs", fields: [abTestId], references: [id])
 
   @@index([status])
   @@index([createdAt])

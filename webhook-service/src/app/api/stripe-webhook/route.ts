@@ -205,7 +205,8 @@ export async function POST(req: NextRequest) {
     // Add variant info to Stripe metadata
     if (session) {
       try {
-        await stripe.checkout.sessions.update(session.id, {
+        // @ts-expect-error Stripe API 2023-10-16 uses .modify()
+        await (stripe.checkout.sessions.modify as any)(session.id, {
           metadata: {
             ...session.metadata,
             [abAssignment.metadataKey]: abAssignment.variant,
@@ -229,7 +230,7 @@ export async function POST(req: NextRequest) {
       abTestId,
       abVariant,
       videoVersion,
-      stripeMetadata: session?.metadata || null,
+      stripeMetadata: (session?.metadata || undefined) as any,
     },
   });
 
