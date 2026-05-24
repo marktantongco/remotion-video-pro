@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
+import {
+  withAuth,
+  withAdmin,
+  unauthorizedResponse,
+  adminUnauthorizedResponse,
+  sanitizeJobResponse,
+  rateLimitResponse,
+  getClientIp,
+} from '@/lib/security';
+import { rateLimit } from '@/lib/rate-limit';
+import { validateCallbackUrl } from '@/lib/url-validator';
 
 const batchSchema = z.object({
   composition: z.string().min(1),
@@ -28,9 +39,15 @@ const ESTIMATED_COST_PER_VIDEO = 0.08;
 const COST_LIMIT_PER_BATCH = 500;
 
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-webhook-secret');
-  if (secret !== process.env.WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/batch', 'POST');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe comparison for webhook secret
+  if (!withAuth(req)) {
+    return unauthorizedResponse();
   }
 
   const body = await req.json();
@@ -43,6 +60,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { composition, records, callbackUrl, priority } = parsed.data;
+
+  // VULN-5: SSRF protection — validate callback URL
+  if (callbackUrl) {
+    const validation = validateCallbackUrl(callbackUrl);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: `Invalid callback URL: ${validation.error}` },
+        { status: 400 }
+      );
+    }
+  }
 
   const totalEstimate = records.length * ESTIMATED_COST_PER_VIDEO;
   if (totalEstimate > COST_LIMIT_PER_BATCH) {
@@ -103,6 +131,17 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/batch', 'GET');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-3: Require admin auth for GET — batch listing exposes customer data
+  if (!withAdmin(req)) {
+    return adminUnauthorizedResponse();
+  }
+
   const { searchParams } = req.nextUrl;
   const composition = searchParams.get('composition');
   const status = searchParams.get('status');
@@ -125,7 +164,7 @@ export async function GET(req: NextRequest) {
     done: jobs.filter((j) => j.status === 'done').length,
     failed: jobs.filter((j) => j.status === 'failed').length,
     avgProgress: jobs.length > 0 ? jobs.reduce((sum, j) => sum + j.progress, 0) / jobs.length : 0,
-    jobs: jobs.map((j) => ({
+    jobs: jobs.map((j) => sanitizeJobResponse(j as unknown as Record<string, unknown>)).map((j) => ({
       id: j.id,
       composition: j.composition,
       status: j.status,
@@ -133,6 +172,8 @@ export async function GET(req: NextRequest) {
       outputUrl: j.outputUrl,
       error: j.error,
       createdAt: j.createdAt,
+      // Note: props are sanitized — PII is masked
+      props: j.props,
     })),
   };
 

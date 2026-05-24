@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import {
+  withAdmin,
+  adminUnauthorizedResponse,
+  rateLimitResponse,
+  getClientIp,
+} from '@/lib/security';
+import { rateLimit } from '@/lib/rate-limit';
 
 // ── Auth ──
 // Admin secret protects all composition management endpoints.
 // Set ADMIN_SECRET in env. Separate from WEBHOOK_SECRET (which is for external systems).
-function verifyAdmin(req: NextRequest): boolean {
-  const header = req.headers.get('x-admin-secret');
-  return header === process.env.ADMIN_SECRET;
-}
+// VULN-1: Now uses timing-safe comparison via withAdmin() from security.ts
 
 // ── POST: Activate a specific version ──
 // Flips isActive=false on all versions of a composition, then flips the target to true.
@@ -19,8 +23,15 @@ const activateSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  if (!verifyAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/composition/activate', 'POST');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe admin auth check
+  if (!withAdmin(req)) {
+    return adminUnauthorizedResponse();
   }
 
   const body = await req.json();
@@ -88,8 +99,15 @@ const registerSchema = z.object({
 });
 
 export async function PUT(req: NextRequest) {
-  if (!verifyAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/composition/activate', 'PUT');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe admin auth check
+  if (!withAdmin(req)) {
+    return adminUnauthorizedResponse();
   }
 
   const body = await req.json();
@@ -134,8 +152,15 @@ export async function PUT(req: NextRequest) {
 
 // ── GET: List all versions of a composition ──
 export async function GET(req: NextRequest) {
-  if (!verifyAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/composition/activate', 'GET');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe admin auth check
+  if (!withAdmin(req)) {
+    return adminUnauthorizedResponse();
   }
 
   const composition = req.nextUrl.searchParams.get('composition');
@@ -162,8 +187,15 @@ export async function GET(req: NextRequest) {
 
 // ── DELETE: Deactivate a specific version ──
 export async function DELETE(req: NextRequest) {
-  if (!verifyAdmin(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/composition/activate', 'DELETE');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe admin auth check
+  if (!withAdmin(req)) {
+    return adminUnauthorizedResponse();
   }
 
   const composition = req.nextUrl.searchParams.get('composition');

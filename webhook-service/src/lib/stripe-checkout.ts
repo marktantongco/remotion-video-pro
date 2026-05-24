@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import Stripe from 'stripe';
 import { generateCheckoutHmac } from './hmac';
 
@@ -23,9 +24,9 @@ export async function createSecureCheckoutSession(
     apiVersion: '2023-10-16',
   });
 
-  // Generate a temporary session ID to HMAC
-  // We use a unique ID that we control, then pass it to Stripe
-  const checkoutId = `chk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  // Use crypto.randomBytes() instead of Math.random() for cryptographic safety.
+  // Math.random() is not cryptographically secure — its output can be predicted.
+  const checkoutId = `chk_${Date.now()}_${randomBytes(4).toString('hex')}`;
   const hmac = generateCheckoutHmac(checkoutId);
 
   const session = await stripe.checkout.sessions.create({

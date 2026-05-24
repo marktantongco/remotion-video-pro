@@ -3,6 +3,8 @@ import Stripe from 'stripe';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
 import { verifyCheckoutHmac } from '@/lib/hmac';
+import { rateLimitResponse, getClientIp } from '@/lib/security';
+import { rateLimit } from '@/lib/rate-limit';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -92,7 +94,43 @@ function resolveComposition(eventType: string, versionHeader?: string | null): s
   return STRIPE_EVENT_MAP[eventType] || null;
 }
 
+/**
+ * Check if there's an active A/B test for a composition.
+ * If so, randomly assign a variant and resolve the version.
+ *
+ * @param composition - Base composition name (e.g., "ThankYouVideo")
+ * @returns A/B test assignment or null
+ */
+async function getABTestAssignment(
+  composition: string
+): Promise<{ abTestId: string; variant: 'control' | 'treatment'; version: string; metadataKey: string } | null> {
+  const activeTest = await prisma.aBTest.findFirst({
+    where: { composition, isActive: true },
+  });
+
+  if (!activeTest) return null;
+
+  // 50/50 random assignment
+  const variant = Math.random() < 0.5 ? 'control' as const : 'treatment' as const;
+  const version = variant === 'control'
+    ? activeTest.controlVersion
+    : activeTest.treatmentVersion;
+
+  return {
+    abTestId: activeTest.id,
+    variant,
+    version,
+    metadataKey: activeTest.stripeMetadataKey,
+  };
+}
+
 export async function POST(req: NextRequest) {
+  // VULN-4: Rate limiting (higher limit for Stripe retries)
+  const rl = rateLimit(getClientIp(req), '/api/stripe-webhook', 'POST');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
   const body = await req.text();
   const sig = req.headers.get('stripe-signature');
 
@@ -101,7 +139,6 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Layer 1: Verify Stripe webhook signature ──
-  // Confirms the payload came from Stripe, not from a random HTTP client.
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(
@@ -118,7 +155,7 @@ export async function POST(req: NextRequest) {
   // Resolve composition
   const eventType = event.type;
   const versionHeader = req.headers.get('x-composition-version');
-  const composition = resolveComposition(eventType, versionHeader);
+  let composition = resolveComposition(eventType, versionHeader);
 
   if (!composition) {
     console.log(`[Stripe] Unhandled event: ${eventType}`);
@@ -127,14 +164,13 @@ export async function POST(req: NextRequest) {
 
   // Extract props from Stripe session data
   let props: Record<string, unknown>;
+  let session: StripeSession | null = null;
+
   try {
     if (eventType === 'checkout.session.completed') {
-      const session = event.data.object as unknown as StripeSession;
+      session = event.data.object as unknown as StripeSession;
 
       // ── Layer 2: Per-checkout HMAC verification ──
-      // Confirms this checkout was initiated by our server (not replayed or forged).
-      // HMAC is generated server-side when creating the Stripe checkout session
-      // and stored in session metadata as "render_hmac".
       const renderHmac = session.metadata?.render_hmac;
       if (!verifyCheckoutHmac(session.id, renderHmac)) {
         console.error(`[Stripe] HMAC verification failed for session ${session.id}`);
@@ -153,18 +189,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to extract props' }, { status: 500 });
   }
 
-  // Create render job
+  // ── A/B Test Integration ──
+  let abTestId: string | undefined;
+  let abVariant: string | undefined;
+  let videoVersion: string | undefined;
+  let resolvedComposition = composition;
+
+  const abAssignment = await getABTestAssignment(composition);
+  if (abAssignment) {
+    abTestId = abAssignment.abTestId;
+    abVariant = abAssignment.variant;
+    videoVersion = abAssignment.version;
+    resolvedComposition = `${composition}:${abAssignment.version}`;
+
+    // Add variant info to Stripe metadata
+    if (session) {
+      try {
+        await stripe.checkout.sessions.update(session.id, {
+          metadata: {
+            ...session.metadata,
+            [abAssignment.metadataKey]: abAssignment.variant,
+          },
+        });
+      } catch (err) {
+        console.warn(`[Stripe] Failed to update session metadata with variant:`, err);
+      }
+    }
+
+    console.log(`[A/B Test] Assigned variant "${abVariant}" for test ${abTestId} (version: ${videoVersion})`);
+  }
+
+  // Create render job with A/B test fields
   const job = await prisma.renderJob.create({
     data: {
       composition,
+      version: videoVersion || undefined,
       props: props as any,
       status: 'pending',
+      abTestId,
+      abVariant,
+      videoVersion,
+      stripeMetadata: session?.metadata || null,
+    },
+  });
+
+  // Create analytics record
+  await prisma.renderAnalytics.create({
+    data: {
+      jobId: job.id,
+      abTestId,
+      variant: abVariant,
+      composition,
+      version: videoVersion || 'default',
     },
   });
 
   // Enqueue for rendering
   await renderQueue.add('render', {
-    composition,
+    composition: resolvedComposition,
     props,
     jobId: job.id,
   }, {
@@ -172,12 +254,14 @@ export async function POST(req: NextRequest) {
     backoff: { type: 'exponential', delay: 5000 },
   });
 
-  console.log(`[Stripe] ${eventType} → ${composition} (job: ${job.id})`);
+  console.log(`[Stripe] ${eventType} → ${resolvedComposition} (job: ${job.id}, variant: ${abVariant || 'none'})`);
 
   return NextResponse.json({
     received: true,
     jobId: job.id,
-    composition,
+    composition: resolvedComposition,
+    abTestId,
+    abVariant,
     status: 'queued',
   });
 }

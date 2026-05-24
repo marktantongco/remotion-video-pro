@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
+import {
+  withAuth,
+  unauthorizedResponse,
+  sanitizeJobResponse,
+  rateLimitResponse,
+  getClientIp,
+} from '@/lib/security';
+import { rateLimit } from '@/lib/rate-limit';
 
 const webhookSchema = z.object({
   event: z.string().min(1).max(100),
@@ -53,9 +61,15 @@ async function resolveCompositionVersion(
 }
 
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-webhook-secret');
-  if (secret !== process.env.WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/render', 'POST');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-1: Timing-safe comparison for webhook secret
+  if (!withAuth(req)) {
+    return unauthorizedResponse();
   }
 
   const body = await req.json();
@@ -116,6 +130,17 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  // VULN-4: Rate limiting
+  const rl = rateLimit(getClientIp(req), '/api/render', 'GET');
+  if (!rl.allowed) {
+    return rateLimitResponse(rl.retryAfter);
+  }
+
+  // VULN-3: Require authentication for GET — prevents PII exposure
+  if (!withAuth(req)) {
+    return unauthorizedResponse();
+  }
+
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) {
     return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
@@ -126,5 +151,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json(job);
+  // VULN-3: Sanitize response — strip PII from job props before returning
+  const sanitized = sanitizeJobResponse(job as unknown as Record<string, unknown>);
+
+  return NextResponse.json(sanitized);
 }

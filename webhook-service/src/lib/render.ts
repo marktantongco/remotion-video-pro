@@ -4,6 +4,7 @@ import {
 } from '@remotion/lambda';
 import { RenderJobData } from './queue';
 import { prisma } from './db';
+import { validateCallbackUrl } from './url-validator';
 
 const REGION = process.env.REMOTION_AWS_REGION!;
 const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME!;
@@ -65,19 +66,27 @@ export async function startLambdaRender(data: RenderJobData) {
 
   const outputUrl = `https://${bucketName}.s3.amazonaws.com/${renderId}.mp4`;
 
+  // VULN-5: Validate callback URL before making the request (SSRF protection)
   if (data.callbackUrl) {
-    await fetch(data.callbackUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jobId: data.jobId,
-        status: 'done',
-        outputUrl,
-        renderedAt: new Date().toISOString(),
-      }),
-    }).catch((err) => {
-      console.error(`Callback failed for job ${data.jobId}:`, err);
-    });
+    const validation = validateCallbackUrl(data.callbackUrl);
+    if (validation.valid) {
+      await fetch(data.callbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: data.jobId,
+          status: 'done',
+          outputUrl,
+          renderedAt: new Date().toISOString(),
+        }),
+      }).catch((err) => {
+        console.error(`Callback failed for job ${data.jobId}:`, err);
+      });
+    } else {
+      console.error(
+        `Callback skipped for job ${data.jobId}: invalid URL — ${validation.error}`
+      );
+    }
   }
 
   return { renderId, outputUrl };

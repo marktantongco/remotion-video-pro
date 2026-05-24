@@ -1,7 +1,9 @@
 {
-  "name": "remotion-webhook-service",
-  "version": "1.0.0",
+  "name": "remotion-video-pro",
+  "version": "2.0.0",
   "private": true,
+  "author": "marktantongco",
+  "description": "Video Personalization Engine — Programmatic video rendering API with A/B testing, Stripe integration, and real-time personalization.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

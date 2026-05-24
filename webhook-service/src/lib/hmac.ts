@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 const HMAC_ALGORITHM = 'sha256';
 const HMAC_KEY_ENV = 'CHECKOUT_HMAC_SECRET';
@@ -67,7 +67,7 @@ export function verifyCheckoutHmac(
       return false;
     }
 
-    return require('crypto').timingSafeEqual(expectedBuf, providedBuf);
+    return timingSafeEqual(expectedBuf, providedBuf);
   } catch {
     return false;
   }

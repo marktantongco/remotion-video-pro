@@ -8,21 +8,33 @@ datasource db {
 }
 
 model RenderJob {
-  id          String   @id @default(cuid())
-  composition String
-  version     String?  // Optional version tag (e.g., "v1", "v2")
-  props       Json
-  status      String   @default("pending") // pending, rendering, done, failed
-  progress    Float    @default(0)
-  outputUrl   String?
-  error       String?
-  webhookUrl  String?  // Callback URL when render completes
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  composition    String
+  version        String?  // Optional version tag (e.g., "v1", "v2")
+  props          Json
+  status         String   @default("pending") // pending, rendering, done, failed
+  progress       Float    @default(0)
+  outputUrl      String?
+  error          String?
+  webhookUrl     String?  // Callback URL when render completes
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // A/B testing fields
+  abTestId       String?  // A/B test cohort ID
+  abVariant      String?  // "control" or "treatment"
+  stripeMetadata Json?    // Raw Stripe metadata for analytics
+  videoVersion   String?  // Track which composition version was rendered
+  ltvTracked     Boolean  @default(false) // Has LTV data been captured?
+
+  // Relations
+  analytics      RenderAnalytics[]
 
   @@index([status])
   @@index([createdAt])
   @@index([composition, version])
+  @@index([abTestId])
+  @@index([abVariant])
 }
 
 // Composition version registry
@@ -38,4 +50,45 @@ model CompositionVersion {
 
   @@unique([composition, version])
   @@index([composition, isActive])
+}
+
+// A/B Test configuration
+// Manages experiments that split traffic between composition versions
+model ABTest {
+  id               String    @id @default(cuid())
+  name             String
+  composition      String
+  controlVersion   String    // e.g., "v1"
+  treatmentVersion String    // e.g., "v2"
+  stripeMetadataKey String   // e.g., "video_variant" — stored in Stripe checkout metadata
+  isActive         Boolean   @default(true)
+  startedAt        DateTime  @default(now())
+  endedAt          DateTime?
+
+  // Relations
+  renderJobs       RenderJob[] @relation("ABTestJobs")
+
+  @@unique([composition, name])
+}
+
+// Render analytics for A/B test tracking
+// Records post-render events: email opens, video plays, conversions
+model RenderAnalytics {
+  id           String    @id @default(cuid())
+  jobId        String
+  abTestId     String?
+  variant      String?
+  composition  String
+  version      String
+  renderedAt   DateTime  @default(now())
+  deliveryOpen Boolean?  @default(false) // Did recipient open the email?
+  videoPlayed  Boolean?  @default(false) // Did they watch the video?
+  conversion   Boolean?  @default(false) // Did they convert/purchase?
+  ltv          Float?    // Customer LTV tracked post-render
+
+  // Relations
+  renderJob    RenderJob @relation(fields: [jobId], references: [id])
+
+  @@index([abTestId, variant])
+  @@index([renderedAt])
 }
