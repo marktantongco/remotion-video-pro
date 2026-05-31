@@ -2,10 +2,11 @@ import {
   renderMediaOnLambda,
   getRenderProgress,
 } from '@remotion/lambda';
+import type { AwsRegion } from '@remotion/lambda';
 import { RenderJobData } from './queue';
 import { prisma } from './db';
 
-const REGION = process.env.REMOTION_AWS_REGION!;
+const REGION = process.env.REMOTION_AWS_REGION! as AwsRegion;
 const FUNCTION_NAME = process.env.REMOTION_FUNCTION_NAME!;
 const SERVE_URL = process.env.REMOTION_SERVE_URL!;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
@@ -41,7 +42,7 @@ async function getABTestAssignment(composition: string): Promise<{
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-04-10',
+  apiVersion: '2023-10-16',
 });
 
 // Map Stripe events to Remotion compositions
@@ -198,13 +199,13 @@ export async function POST(req: NextRequest) {
     data: {
       composition,
       version: renderVersion,
-      props,
+      props: props as Prisma.InputJsonValue,
       status: 'pending',
       abTestId: abTestId ?? undefined,
       abVariant: abVariant ?? undefined,
       videoVersion: videoVersion ?? undefined,
       stripeMetadata: eventType === 'checkout.session.completed'
-        ? ((event.data.object as unknown as StripeSession).metadata as Record<string, unknown>) ?? undefined
+        ? (((event.data.object as unknown as StripeSession).metadata as Record<string, string>) ?? undefined) as Prisma.InputJsonValue | undefined
         : undefined,
     },
   });

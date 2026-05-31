@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
-import { verifyWebhookSecret, sanitizeJobResponse } from '@/lib/security';
+import { verifyWebhookSecret, verifyAdminSecret, sanitizeJobResponse } from '@/lib/security';
 
 const webhookSchema = z.object({
   event: z.string().min(1).max(100),
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
     data: {
       composition: resolved.composition,
       version: resolved.version,
-      props: parsed.data.data,
+      props: parsed.data.data as Prisma.InputJsonValue,
       status: 'pending',
     },
   });

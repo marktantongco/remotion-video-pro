@@ -1,15 +1,14 @@
 import Stripe from 'stripe';
+import { randomBytes } from 'crypto';
 import { generateCheckoutHmac } from './hmac';
 
 /**
  * Create a Stripe checkout session with an embedded render HMAC.
  *
- * The HMAC is stored in session.metadata.render_hmac and verified by
- * the /api/stripe-webhook endpoint when Stripe fires checkout.session.completed.
- *
- * This prevents unauthorized renders — even if an attacker replays a valid
- * Stripe webhook payload with a correct signature, they can't forge the HMAC
- * because they don't know CHECKOUT_HMAC_SECRET.
+ * The HMAC is generated using a checkout ID that combines the session
+ * creation timestamp with a crypto-safe random suffix. This single-step
+ * approach avoids the need to update the session after creation (Stripe
+ * Checkout sessions are immutable after creation).
  *
  * @param params - Stripe checkout session creation params
  * @returns The created Stripe checkout session
@@ -20,12 +19,11 @@ export async function createSecureCheckoutSession(
   }
 ): Promise<Stripe.Checkout.Session> {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-04-10',
+    apiVersion: '2023-10-16',
   });
 
-  // Generate a temporary session ID to HMAC
-  // We use a unique ID that we control, then pass it to Stripe
-  const checkoutId = `chk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  // Generate a unique checkout ID using crypto-safe randomness
+  const checkoutId = `chk_${Date.now()}_${randomBytes(4).toString('hex')}`;
   const hmac = generateCheckoutHmac(checkoutId);
 
   const session = await stripe.checkout.sessions.create({
@@ -34,17 +32,6 @@ export async function createSecureCheckoutSession(
       ...params.metadata,
       checkout_id: checkoutId,
       render_hmac: hmac,
-    },
-  });
-
-  // Now that we have the real session ID, generate the real HMAC
-  // and update the session metadata
-  const realHmac = generateCheckoutHmac(session.id);
-  await stripe.checkout.sessions.update(session.id, {
-    metadata: {
-      ...params.metadata,
-      checkout_id: session.id,
-      render_hmac: realHmac,
     },
   });
 

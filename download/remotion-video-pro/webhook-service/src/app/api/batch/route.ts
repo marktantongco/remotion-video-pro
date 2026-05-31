@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
 import { verifyWebhookSecret, verifyAdminSecret } from '@/lib/security';
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
       prisma.renderJob.create({
         data: {
           composition,
-          props: record.props,
+          props: record.props as Prisma.InputJsonValue,
           status: 'pending',
           webhookUrl: callbackUrl,
         },
