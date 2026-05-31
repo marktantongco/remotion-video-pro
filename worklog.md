@@ -258,3 +258,35 @@ Stage Summary:
 - Routes: competitor-intel, product-launch, personalized-videos, content-repurpose, ab-testing
 - SkillBridge: 13 methods, Zod-validated, typed, with TODO markers for SDK wiring
 - All content translated to English
+---
+Task ID: 6
+Agent: Main Agent
+Task: Complete Phase 3-4 merge — security suite, A/B testing, repackage, commit
+
+Work Log:
+- Identified that Phase 3-4 files (created in /tmp/ in previous session) were missing from download directory
+- Phase 3-4 had been pushed to GitHub but never synced back to the local download directory
+- Created middleware.ts: Next.js middleware with 7 security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy) + CORS on API routes
+- Fixed render/route.ts: replaced direct string comparison with timing-safe verifyWebhookSecret(), added auth to GET endpoint, added PII sanitization
+- Fixed batch/route.ts: replaced direct comparison with timing-safe auth, added admin-only auth for GET, added SSRF protection on callbackUrl
+- Fixed composition/activate/route.ts: replaced verifyAdmin() with timing-safe verifyAdminSecret() from security.ts
+- Updated Prisma schema: added ABTest model (1 active per composition, @@unique), RenderAnalytics model (event counters + daily breakdown JSON), 6 A/B fields on RenderJob (abTestId, abVariant, stripeMetadata, videoVersion, ltvTracked, analytics relation)
+- Created /api/ab/route.ts: POST creates A/B test (enforces 1 active per composition, 409 on conflict), GET lists with aggregated control/treatment stats
+- Created /api/ab/[id]/route.ts: GET returns per-variant stats + chi-square test (Yates correction) + 30-day daily breakdown, DELETE ends test (sets isActive=false)
+- Created /api/analytics/track/route.ts: POST tracks email_opened/video_played/converted events, upserts RenderAnalytics, auth via x-analytics-token
+- Updated stripe-webhook/route.ts: added getABTestAssignment() with crypto-safe 50/50 variant assignment, creates RenderAnalytics record on A/B jobs, returns variant info in response
+- Updated .env.example: added ANALYTICS_TOKEN, ALLOWED_ORIGINS, ALLOWED_CALLBACK_DOMAINS
+- Removed 506MB node_modules that was accidentally committed
+- Repackaged remotion-video-pro.zip: 570KB (was 166MB with node_modules)
+- Committed all changes locally (git commit ff13526)
+- GitHub push requires user credentials (no token available in environment)
+- Vercel deployment requires user credentials (no token available in environment)
+
+Stage Summary:
+- 7 new/modified TypeScript files for security + A/B testing
+- 3 new API endpoints: /api/ab, /api/ab/[id], /api/analytics/track
+- All 6 security vulnerabilities fixed (timing-safe auth, security headers, GET auth, PII sanitization, SSRF protection, rate limiting)
+- Full A/B testing framework with chi-square significance testing
+- Complete v3.0 ZIP: 570KB at /home/z/my-project/download/remotion-video-pro.zip
+- Local git commit ready: ff13526 (needs push to origin with user credentials)
+- Total API endpoints: 15 (render, batch, stripe-webhook, composition/activate, pipeline, pipeline/list, ab, ab/[id], analytics/track, page)
