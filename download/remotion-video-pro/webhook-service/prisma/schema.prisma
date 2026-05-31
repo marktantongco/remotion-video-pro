@@ -30,6 +30,9 @@ model RenderJob {
   // A/B test relation (optional — many jobs can belong to one test)
   abTest ABTest? @relation(fields: [abTestId], references: [id])
 
+  // Reverse relation to analytics
+  analytics RenderAnalytics[]
+
   @@index([status])
   @@index([createdAt])
   @@index([composition, version])
