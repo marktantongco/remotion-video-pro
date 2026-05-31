@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
+import { verifyAdminSecret } from '@/lib/security';
 
 // ── Auth ──
 // Admin secret protects all composition management endpoints.
-// Set ADMIN_SECRET in env. Separate from WEBHOOK_SECRET (which is for external systems).
+// Uses timing-safe comparison to prevent timing attacks.
 function verifyAdmin(req: NextRequest): boolean {
   const header = req.headers.get('x-admin-secret');
-  return header === process.env.ADMIN_SECRET;
+  return verifyAdminSecret(header, process.env.ADMIN_SECRET);
 }
 
 // ── POST: Activate a specific version ──

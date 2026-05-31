@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
+import { verifyWebhookSecret, verifyAdminSecret } from '@/lib/security';
+import { validateUrls } from '@/lib/url-validator';
 
 const batchSchema = z.object({
   composition: z.string().min(1),
@@ -29,7 +31,7 @@ const COST_LIMIT_PER_BATCH = 500;
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-webhook-secret');
-  if (secret !== process.env.WEBHOOK_SECRET) {
+  if (!verifyWebhookSecret(secret, process.env.WEBHOOK_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -43,6 +45,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { composition, records, callbackUrl, priority } = parsed.data;
+
+  // SSRF protection on callback URL
+  if (callbackUrl) {
+    const urlValidation = validateUrls([callbackUrl]);
+    if (urlValidation.invalid.length > 0) {
+      return NextResponse.json(
+        { error: 'Invalid callback URL', details: urlValidation.invalid[0].error },
+        { status: 400 }
+      );
+    }
+  }
 
   const totalEstimate = records.length * ESTIMATED_COST_PER_VIDEO;
   if (totalEstimate > COST_LIMIT_PER_BATCH) {
@@ -103,6 +116,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  // Auth: admin only for batch listing
+  const secret = req.headers.get('x-admin-secret');
+  if (!verifyAdminSecret(secret, process.env.ADMIN_SECRET)) {
+    return NextResponse.json({ error: 'Unauthorized — admin access required' }, { status: 401 });
+  }
+
   const { searchParams } = req.nextUrl;
   const composition = searchParams.get('composition');
   const status = searchParams.get('status');

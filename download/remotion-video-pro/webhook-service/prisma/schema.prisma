@@ -20,9 +20,20 @@ model RenderJob {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // A/B testing fields
+  abTestId     String?  // Which A/B test this job belongs to
+  abVariant    String?  // "control" or "treatment"
+  stripeMetadata Json?  // Original Stripe session metadata
+  videoVersion String?  // Video version rendered (for variant comparison)
+  ltvTracked   Float?   // Lifetime value tracked post-render
+
+  // A/B test relation (optional — many jobs can belong to one test)
+  abTest ABTest? @relation(fields: [abTestId], references: [id])
+
   @@index([status])
   @@index([createdAt])
   @@index([composition, version])
+  @@index([abTestId])
 }
 
 // Composition version registry
@@ -38,4 +49,58 @@ model CompositionVersion {
 
   @@unique([composition, version])
   @@index([composition, isActive])
+}
+
+// A/B test configuration
+// Controls which composition gets tested, with two variants (control/treatment)
+model ABTest {
+  id            String   @id @default(cuid())
+  name          String   // Human-readable test name
+  composition   String   // Which composition is being tested
+  controlVersion  String  // Video version for control group
+  treatmentVersion String // Video version for treatment group
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Reverse relation to render jobs
+  renderJobs RenderJob[]
+
+  // Reverse relation to analytics events
+  analytics  RenderAnalytics[]
+
+  @@index([composition, isActive])
+  @@unique([composition, isActive]) // Only 1 active test per composition
+}
+
+// Render analytics — event tracking for A/B tests
+// Tracks email_opened, video_played, converted events per render job
+model RenderAnalytics {
+  id           String   @id @default(cuid())
+  renderJobId  String   @unique // Links to the render job
+  abTestId     String?  // Which A/B test (if any)
+
+  // Event counters
+  emailOpens   Int      @default(0)
+  videoPlays   Int      @default(0)
+  conversions  Int      @default(0)
+  ltv          Float    @default(0) // Lifetime value (sum of revenue)
+
+  // Variant info (denormalized for fast queries)
+  abVariant    String?  // "control" or "treatment"
+  videoVersion String?  // Video version rendered
+
+  // Daily breakdown stored as JSON: { "2026-05-31": { emailOpens: 5, videoPlays: 3 } }
+  dailyBreakdown Json @default("{}")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  renderJob RenderJob?  @relation(fields: [renderJobId], references: [id])
+  abTest    ABTest?      @relation(fields: [abTestId], references: [id])
+
+  @@index([abTestId])
+  @@index([abVariant])
+  @@index([renderJobId])
 }

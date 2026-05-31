@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
+import { verifyWebhookSecret, sanitizeJobResponse } from '@/lib/security';
 
 const webhookSchema = z.object({
   event: z.string().min(1).max(100),
@@ -54,7 +55,7 @@ async function resolveCompositionVersion(
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('x-webhook-secret');
-  if (secret !== process.env.WEBHOOK_SECRET) {
+  if (!verifyWebhookSecret(secret, process.env.WEBHOOK_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -116,6 +117,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  // Auth: require webhook secret or admin secret for GET
+  const secret = req.headers.get('x-webhook-secret') || req.headers.get('x-admin-secret');
+  if (!verifyWebhookSecret(secret, process.env.WEBHOOK_SECRET) &&
+      !verifyAdminSecret(secret, process.env.ADMIN_SECRET)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) {
     return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
@@ -126,5 +134,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json(job);
+  // Sanitize PII fields before returning
+  return NextResponse.json(sanitizeJobResponse(job));
 }

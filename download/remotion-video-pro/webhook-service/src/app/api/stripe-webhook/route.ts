@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { randomBytes } from 'crypto';
 import { renderQueue } from '@/lib/queue';
 import { prisma } from '@/lib/db';
 import { verifyCheckoutHmac } from '@/lib/hmac';
+
+// ── A/B Test Assignment ──
+
+/**
+ * Check for an active A/B test on the given composition.
+ * If found, randomly assigns a variant (50/50) and returns the test info.
+ */
+async function getABTestAssignment(composition: string): Promise<{
+  abTestId: string | null;
+  abVariant: 'control' | 'treatment' | null;
+  videoVersion: string | null;
+}> {
+  const activeTest = await prisma.aBTest.findFirst({
+    where: { composition, isActive: true },
+  });
+
+  if (!activeTest) {
+    return { abTestId: null, abVariant: null, videoVersion: null };
+  }
+
+  // 50/50 random assignment using crypto-safe randomness
+  const byte = randomBytes(1)[0];
+  const variant: 'control' | 'treatment' = byte < 128 ? 'control' : 'treatment';
+  const videoVersion = variant === 'control'
+    ? activeTest.controlVersion
+    : activeTest.treatmentVersion;
+
+  console.log(`[A/B] Test "${activeTest.name}" — assigned ${variant} (version: ${videoVersion})`);
+
+  return {
+    abTestId: activeTest.id,
+    abVariant: variant,
+    videoVersion,
+  };
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-04-10',
@@ -153,18 +189,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to extract props' }, { status: 500 });
   }
 
-  // Create render job
+  // Check for A/B test on this composition
+  const { abTestId, abVariant, videoVersion } = await getABTestAssignment(composition);
+  const renderVersion = videoVersion || 'default';
+
+  // Create render job with A/B test fields
   const job = await prisma.renderJob.create({
     data: {
       composition,
+      version: renderVersion,
       props,
       status: 'pending',
+      abTestId: abTestId ?? undefined,
+      abVariant: abVariant ?? undefined,
+      videoVersion: videoVersion ?? undefined,
+      stripeMetadata: eventType === 'checkout.session.completed'
+        ? ((event.data.object as unknown as StripeSession).metadata as Record<string, unknown>) ?? undefined
+        : undefined,
     },
   });
 
+  // Create analytics record for A/B test tracking
+  if (abTestId && abVariant) {
+    await prisma.renderAnalytics.create({
+      data: {
+        renderJobId: job.id,
+        abTestId,
+        abVariant,
+        videoVersion,
+      },
+    });
+    console.log(`[Stripe] ${eventType} → ${composition} (job: ${job.id}, A/B: ${abVariant})`);
+  } else {
+    console.log(`[Stripe] ${eventType} → ${composition} (job: ${job.id})`);
+  }
+
   // Enqueue for rendering
   await renderQueue.add('render', {
-    composition,
+    composition: renderVersion === 'default' ? composition : `${composition}:${renderVersion}`,
     props,
     jobId: job.id,
   }, {
@@ -172,12 +234,13 @@ export async function POST(req: NextRequest) {
     backoff: { type: 'exponential', delay: 5000 },
   });
 
-  console.log(`[Stripe] ${eventType} → ${composition} (job: ${job.id})`);
-
   return NextResponse.json({
     received: true,
     jobId: job.id,
     composition,
+    version: renderVersion,
+    abTestId: abTestId ?? undefined,
+    abVariant: abVariant ?? undefined,
     status: 'queued',
   });
 }
