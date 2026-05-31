@@ -2,62 +2,79 @@
 name: infographic-gen
 version: 1.0.0
 description: Generate publication-ready infographics from content. Use when transforming data, articles, reports, or concepts into visual infographic format. Covers 21 layout patterns across 20 visual styles, automated layout and style recommendations, multilingual support, and multiple aspect ratios. Suitable for marketing materials, data reports, social media, educational content, and business presentations.
-source: https://lobehub.com/skills/jimliu-baoyu-skills-baoyu-infographic (unique capability)
-changelog: Initial release — infographic generation with 420+ layout-style combinations
+remotion_stage: DESIGN
+integration_type: visual_asset
+pipeline_routes: [competitor-intel]
 ---
 
-# Infographic Generator
+# Infographic Gen — Remotion Integration Guide
 
-Transform content into publication-ready infographic visuals with intelligent layout and style matching.
+## Overview
+Infographic generation that produces frame-ready visual summaries for embedding within Remotion video compositions. Transforms competitor data, market research, and analytical content into visually rich infographic frames that animate as standalone segments in comparison and analysis videos.
 
-## Layout Patterns (21)
+## Pipeline Role
+In the competitor-intel route, generates infographic-style frames that visualize competitor positioning, market share data, feature comparisons, and strategic insights. These infographic segments appear as dedicated scenes within the Remotion competitor comparison video, providing data-rich visual content between narrative segments.
 
-| Category | Layouts |
-|----------|---------|
-| **Data-Driven** | Bar chart, pie chart, timeline, comparison table, flowchart, process map |
-| **List-Based** | Numbered list, icon grid, checklist, ranking, tier list |
-| **Narrative** | Story arc, before/after, problem/solution, journey map, biography |
-| **Spatial** | Mind map, tree diagram, matrix, radial, geographic |
-| **Specialized** | Calendar, Gantt chart, organizational chart, ecosystem map, SWOT analysis |
+## Integration Pattern
+Infographic generation with scene-level timing for Remotion:
 
-## Visual Styles (20)
+```typescript
+async function generateInfographicScene(data: {
+  content: string;
+  layout: 'comparison' | 'timeline' | 'ranking' | 'process-map';
+  style: 'corporate' | 'minimalist' | 'neon';
+  durationSeconds: number;
+}) {
+  // Generate infographic as high-res PNG
+  const infographicImage = await generateInfographic({
+    content: data.content,
+    layoutPattern: data.layout,
+    visualStyle: data.style,
+    aspectRatio: '16:9',
+  });
+  return {
+    type: 'infographic-frame',
+    base64: infographicImage.base64,
+    durationInFrames: data.durationSeconds * 30,
+    // Parallax animation config for Remotion
+    animation: {
+      type: 'parallax-scroll',
+      scrollSpeed: infographicImage.height / (data.durationSeconds * 30),
+    },
+  };
+}
+```
 
-| Style | Character | Best For |
-|-------|-----------|----------|
-| **Corporate** | Clean, professional, navy/gray | Business reports, executive summaries |
-| **Playful** | Bright colors, rounded shapes | Social media, educational, youth |
-| **Minimalist** | Black/white, maximum whitespace | Luxury brands, editorial |
-| **Vibrant** | High saturation, bold contrasts | Marketing, entertainment |
-| **Retro** | Vintage colors, textured backgrounds | Nostalgic content, heritage brands |
-| **Neon** | Dark backgrounds, glowing accents | Tech, gaming, cyberpunk themes |
-| **Pastel** | Soft hues, gentle gradients | Wellness, beauty, lifestyle |
-| **Geometric** | Strong shapes, angular | Architecture, engineering, data |
-| **Organic** | Natural curves, earth tones | Environment, food, health |
-| **Elegant** | Serif fonts, gold accents | Luxury, fashion, events |
-| **Flat 2.0** | Material-inspired, subtle shadows | SaaS, web services, apps |
-| **Isometric** | 3D perspective illustrations | Technical concepts, cityscapes |
-| **Watercolor** | Painted textures, soft edges | Creative, artistic, editorial |
-| **Comic** | Bold outlines, halftone dots | Entertainment, tutorials, pop culture |
-| **Newspaper** | Column layouts, serif typography | Journalism, research, analysis |
-| **Dark Mode** | Dark backgrounds, light text | Tech products, developer tools |
-| **Gradient Mesh** | Complex color blends, modern | Tech startups, creative agencies |
-| **Handwritten** | Script fonts, sketch-like | Personal, informal, educational |
-| **Infographic Classic** | Icon-heavy, sectioned | General purpose, most versatile |
-| **Brutalist** | Raw typography, stark contrasts | Artistic, provocative, editorial |
+## Data Contract
 
-## Layout and Style Recommendation Engine
+| Direction | Field | Type | Description |
+|-----------|-------|------|-------------|
+| Input | `content` | string | Source data/article for visualization |
+| Input | `layoutPattern` | string | 1 of 21 layouts (bar, timeline, process-map, etc.) |
+| Input | `visualStyle` | string | 1 of 20 styles (corporate, neon, minimalist, etc.) |
+| Input | `aspectRatio` | string | '16:9' (video), '1:1' (social), '9:16' (stories) |
+| Output | `base64` | string | Rendered infographic PNG, base64-encoded |
+| Output | `height` | number | Pixel height for parallax scroll calculation |
 
-Based on content analysis, automatically recommend:
-1. **Content type** — Data-heavy? Narrative? List? Comparison?
-2. **Audience** — Executive? General public? Technical? Youth?
-3. **Platform** — Social media? Print? Web? Presentation?
-4. **Aspect ratio** — 1:1 (social), 16:9 (presentation), 9:16 (stories), 4:3 (print)
+## Route Participation
 
-## Multilingual Support
-Supports content in English, Chinese, Japanese, Korean, Spanish, French, German, and other major languages. Typography automatically adapts per language.
+| Route | Stage | Role | Infographic Types |
+|-------|-------|------|-------------------|
+| competitor-intel | DESIGN | Data visualization frames | Feature comparison, market share, SWOT analysis |
 
-## Activation Triggers
-- User mentions: "infographic", "visual summary", "data visualization", "information design"
-- User needs to transform reports, articles, or data into visual format
-- User asks for: social media graphics, marketing visuals, educational materials
-- Content type is suited for visual storytelling over text-heavy documents
+## Configuration
+- **Layouts**: 21 patterns (data-driven, list-based, narrative, spatial, specialized)
+- **Styles**: 20 visual styles auto-selected based on content analysis
+- **Animation**: Parallax-scroll for tall infographics, scale-in for compact ones
+- **Languages**: Auto-adapts typography for English, Chinese, Japanese, Korean, and more
+
+## Example Pipeline Usage
+```bash
+curl -X POST /api/pipeline \
+  -H "x-webhook-secret: $SECRET" \
+  -d '{"route":"competitor-intel","compositionId":"CompetitorComparisonVideo",
+    "sourceUrls":["https://competitor.com"],"metadata":{
+    "infographic":{"layout":"comparison","style":"corporate","durationSeconds":8}
+  }}'
+```
+An infographic comparison frame is generated and embedded as a Remotion scene with parallax scroll animation over 8 seconds (240 frames).

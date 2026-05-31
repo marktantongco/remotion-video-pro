@@ -1,230 +1,96 @@
 ---
 name: mcp-spy
 description: Debug MCP server communication. Use for troubleshooting MCP integrations, viewing traffic, and analyzing latency.
+remotion_stage: TEST
+integration_type: monitoring
+pipeline_routes: [competitor-intel, product-launch, personalized-videos, ab-testing, content-variation]
 ---
 
-# MCP Spy - Debug MCP Communication
-
-Debug Model Context Protocol server integrations.
+# MCP Spy — Remotion Integration Guide
 
 ## Overview
 
-MCP Spy helps debug:
-- Message traffic between Claude and MCP servers
-- Latency issues
-- Failed requests
-- Protocol compliance
+MCP Spy inspects Model Context Protocol traffic between Claude and MCP servers. In the Remotion Video Pro pipeline, it debugs skill orchestration latency — identifying which MCP tool calls slow the THINK and CREATE stages that feed props into Remotion compositions.
 
-## Traffic Analysis
+## Pipeline Role
 
-### View Recent Traffic
+Operates during TEST as a passive tap on MCP traffic. When a route produces stale props, MCP Spy reveals whether the bottleneck is a server timeout, slow tool response, or protocol error — without modifying pipeline code.
 
-```bash
-# Check MCP logs
-tail -f ~/.claude/debug/mcp-*.log
+## Integration Pattern
 
-# Or specific server
-tail -f ~/.claude/debug/mcp-cm.log
+Wrap MCP tool calls with timing instrumentation to surface per-skill latency:
+
+```typescript
+// mcp-spy.integration.ts — intercepts MCP calls for latency tracking
+interface McpCallLog {
+  tool: string;
+  server: string;
+  durationMs: number;
+  status: "ok" | "error" | "timeout";
+  timestamp: number;
+  pipelineRoute: string;
+}
+
+export function createMcpSpyLogger(route: string) {
+  const logs: McpCallLog[] = [];
+
+  return {
+    recordCall(tool: string, server: string, durationMs: number, status: McpCallLog["status"]) {
+      logs.push({ tool, server, durationMs, status, timestamp: Date.now(), pipelineRoute: route });
+    },
+    getSlowCalls(thresholdMs = 5000): McpCallLog[] {
+      return logs.filter((l) => l.durationMs > thresholdMs);
+    },
+    getFailedCalls(): McpCallLog[] {
+      return logs.filter((l) => l.status !== "ok");
+    },
+    report() {
+      console.table(
+        logs.sort((a, b) => b.durationMs - a.durationMs).slice(0, 20)
+      );
+    },
+  };
+}
+
+// Usage in pipeline route handler
+const spy = createMcpSpyLogger("product-launch");
+const start = Date.now();
+const result = await mcpClient.callTool("firecrawl-scrape", { url });
+spy.recordCall("firecrawl-scrape", "firecrawl", Date.now() - start, "ok");
 ```
 
-### Filter by Type
+## Data Contract
+
+| Field | Type | Source | Destination |
+|-------|------|--------|-------------|
+| `tool` | `string` | MCP call name | Spy log + stdout |
+| `server` | `string` | MCP server identifier | Spy log |
+| `durationMs` | `number` | Measured delta | Spy log + latency dashboard |
+| `status` | `"ok"\|"error"\|"timeout"` | MCP response | Spy log + alert trigger |
+| `pipelineRoute` | `string` | Active route context | Spy log for filtering |
+
+## Route Participation
+
+| Route | Typical MCP Calls Monitored | Latency Threshold |
+|-------|----------------------------|--------------------|
+| competitor-intel | firecrawl-scrape, web-search | < 10s per call |
+| product-launch | firecrawl-scrape, LLM gen | < 15s per call |
+| personalized-videos | LLM gen, data-fetch | < 8s per call |
+| ab-testing | LLM gen (N variants) | < 30s total |
+| content-variation | LLM gen (N versions) | < 25s total |
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_SPY_LOG_DIR` | `~/.claude/debug` | MCP traffic log directory |
+| `MCP_SPY_LATENCY_THRESHOLD` | `5000` | Slow-call threshold (ms) |
+
+## Example Pipeline Usage
+
+MCP Spy reveals that `firecrawl-scrape` calls in competitor-intel average 12s — exceeding the 10s threshold. This prompts adding timeout + fallback cache.
 
 ```bash
-# Tool calls only
-grep "tool_use" ~/.claude/debug/mcp-*.log
-
-# Errors only
-grep -i "error\|failed" ~/.claude/debug/mcp-*.log
-
-# Specific tool
-grep "beads_add" ~/.claude/debug/mcp-*.log
-```
-
-## Latency Analysis
-
-### Measure Response Times
-
-```bash
-# Time a specific tool
-time claude --print "Run beads_ready" --dangerously-skip-permissions 2>&1 | head -1
-```
-
-### Find Slow Calls
-
-```bash
-# Look for latency warnings in logs
-grep -i "timeout\|slow\|latency" ~/.claude/debug/mcp-*.log
-```
-
-## Failed Request Analysis
-
-### Find Failures
-
-```bash
-# All errors
-grep -i "error" ~/.claude/debug/mcp-*.log
-
-# Parse error responses
-grep "\"error\":" ~/.claude/debug/mcp-*.log | jq '.'
-```
-
-### Common Issues
-
-1. **Connection refused** - Server not running
-2. **Timeout** - Server too slow
-3. **Invalid JSON** - Malformed request/response
-4. **Unknown tool** - Tool not registered
-
-## MCP Server Debug
-
-### Check Server Status
-
-```bash
-# Test server connection
-curl -X POST http://localhost:3000/mcp/list_tools \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-### Server Logs
-
-```bash
-# View server logs (if running as process)
-tail -f logs/mcp-server.log
-
-# Or in terminal running server
-# Logs appear in stdout
-```
-
-### Test Tool Directly
-
-```bash
-# Call tool directly
-curl -X POST http://localhost:3000/mcp/call_tool \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "beads_ready",
-    "args": {}
-  }'
-```
-
-## Protocol Debugging
-
-### Inspect Messages
-
-```bash
-# Pretty print JSON messages
-grep "message" ~/.claude/debug/mcp-*.log | jq '.'
-```
-
-### Validate Requests
-
-```bash
-# Check request format
-gemini -m pro -o text -e "" "Validate this MCP request format:
-
-$(grep "request" ~/.claude/debug/mcp-*.log | tail -1)
-
-Check:
-1. Required fields present
-2. Types correct
-3. Schema compliance"
-```
-
-## Troubleshooting Guide
-
-### Server Won't Start
-
-```bash
-# Check if port in use
-lsof -i :3000
-
-# Check server process
-ps aux | grep mcp
-
-# Start with verbose
-node server/index.ts --verbose
-```
-
-### Tool Not Found
-
-```bash
-# List available tools
-curl http://localhost:3000/mcp/list_tools | jq '.tools[].name'
-
-# Check tool registration
-grep "registerTool\|toolRegistry" server/*.ts
-```
-
-### Slow Responses
-
-```bash
-# Profile tool execution
-time curl -X POST http://localhost:3000/mcp/call_tool \
-  -H "Content-Type: application/json" \
-  -d '{"name": "slow_tool", "args": {}}'
-
-# Check for blocking operations
-grep -i "await\|sync" tools/slow_tool/index.ts
-```
-
-### JSON Parse Errors
-
-```bash
-# Find malformed JSON
-grep -B 5 "JSON\|parse" ~/.claude/debug/mcp-*.log | grep -i error
-
-# Validate JSON
-echo '{"test": ...}' | jq '.'
-```
-
-## Monitoring
-
-### Watch Traffic Live
-
-```bash
-# Real-time log monitoring
 tail -f ~/.claude/debug/mcp-*.log | grep --line-buffered "tool_use\|result"
+grep -i "timeout\|slow" ~/.claude/debug/mcp-*.log | grep -oP '"duration":\K[0-9]+'
 ```
-
-### Traffic Stats
-
-```bash
-# Count calls per tool
-grep "tool_use" ~/.claude/debug/mcp-*.log | \
-  grep -oP '"name":"[^"]*"' | \
-  sort | uniq -c | sort -rn
-```
-
-### Health Dashboard
-
-```bash
-#!/bin/bash
-# mcp-health.sh
-
-echo "=== MCP Server Health ==="
-
-# Check server
-if curl -s http://localhost:3000/health > /dev/null 2>&1; then
-  echo "Server: UP"
-else
-  echo "Server: DOWN"
-fi
-
-# Recent errors
-ERRORS=$(grep -c "error" ~/.claude/debug/mcp-*.log 2>/dev/null || echo 0)
-echo "Recent errors: $ERRORS"
-
-# Tool count
-TOOLS=$(curl -s http://localhost:3000/mcp/list_tools 2>/dev/null | jq '.tools | length' || echo 0)
-echo "Registered tools: $TOOLS"
-```
-
-## Best Practices
-
-1. **Enable logging** - Keep debug logs on during development
-2. **Check health first** - Verify server running before debugging
-3. **Test isolation** - Test tools directly before through Claude
-4. **Monitor latency** - Watch for degradation
-5. **Log rotation** - Don't let logs grow unbounded
-6. **Error alerts** - Set up monitoring for failures

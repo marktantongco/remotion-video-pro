@@ -1,0 +1,123 @@
+{
+  "version": "2.0.0",
+  "lastSync": "2026-05-31T00:00:00.000Z",
+  "sourcePath": "/home/z/my-project/skills/",
+  "targetPath": "/home/z/my-project/download/remotion-video-pro/integration-skills/",
+  "categories": {
+    "01-content-ingestion": {
+      "description": "Data gathering, content sourcing, and research for video pipeline",
+      "stage": "ACQUIRE",
+      "skills": [
+        { "name": "firecrawl-scrape", "sourcePath": "firecrawl-scrape/SKILL.md", "targetFile": "firecrawl-scrape.md", "remotionIntegrated": true },
+        { "name": "firecrawl-crawl", "sourcePath": "firecrawl-crawl/SKILL.md", "targetFile": "firecrawl-crawl.md", "remotionIntegrated": true },
+        { "name": "spider", "sourcePath": "spider/SKILL.md", "targetFile": "spider.md", "remotionIntegrated": true },
+        { "name": "web-reader", "sourcePath": "web-reader/SKILL.md", "targetFile": "web-reader.md", "remotionIntegrated": true },
+        { "name": "web-search", "sourcePath": "web-search/SKILL.md", "targetFile": "web-search.md", "remotionIntegrated": true }
+      ]
+    },
+    "02-browser-automation": {
+      "description": "Browser control, page interaction, and session management",
+      "stage": "ACQUIRE",
+      "skills": [
+        { "name": "browser-cdp", "sourcePath": "browser-cdp/SKILL.md", "targetFile": "browser-cdp.md", "remotionIntegrated": true },
+        { "name": "browserbase-fetch", "sourcePath": "browserbase-fetch/SKILL.md", "targetFile": "browserbase-fetch.md", "remotionIntegrated": true },
+        { "name": "fetch", "sourcePath": "fetch/SKILL.md", "targetFile": "fetch.md", "remotionIntegrated": true },
+        { "name": "agent-browser", "sourcePath": "agent-browser/SKILL.md", "targetFile": "agent-browser.md", "remotionIntegrated": true }
+      ]
+    },
+    "03-video-production": {
+      "description": "Video creation, generation, and storyboard management",
+      "stage": "RENDER",
+      "skills": [
+        { "name": "marketing-video", "sourcePath": "marketing-video/SKILL.md", "targetFile": "marketing-video.md", "remotionIntegrated": true },
+        { "name": "video", "sourcePath": "video/SKILL.md", "targetFile": "video.md", "remotionIntegrated": true },
+        { "name": "video-generation", "sourcePath": "video-generation/SKILL.md", "targetFile": "video-generation.md", "remotionIntegrated": true },
+        { "name": "video-understand", "sourcePath": "video-understand/SKILL.md", "targetFile": "video-understand.md", "remotionIntegrated": true },
+        { "name": "storyboard-manager", "sourcePath": "storyboard-manager/SKILL.md", "targetFile": "storyboard-manager.md", "remotionIntegrated": true }
+      ]
+    },
+    "04-ai-intelligence": {
+      "description": "AI reasoning, LLM integration, and multi-perspective analysis",
+      "stage": "THINK",
+      "skills": [
+        { "name": "LLM", "sourcePath": "LLM/SKILL.md", "targetFile": "LLM.md", "remotionIntegrated": true },
+        { "name": "VLM", "sourcePath": "VLM/SKILL.md", "targetFile": "VLM.md", "remotionIntegrated": true },
+        { "name": "think", "sourcePath": "think/SKILL.md", "targetFile": "think.md", "remotionIntegrated": true },
+        { "name": "council-of-five", "sourcePath": "council-of-five/SKILL.md", "targetFile": "council-of-five.md", "remotionIntegrated": true },
+        { "name": "chain-of-thought", "sourcePath": "chain-of-thought/SKILL.md", "targetFile": "chain-of-thought.md", "remotionIntegrated": true }
+      ]
+    },
+    "05-marketing-analytics": {
+      "description": "A/B testing, launch strategy, and marketing optimization",
+      "stage": "TEST",
+      "skills": [
+        { "name": "marketing-ab-testing", "sourcePath": "marketing-ab-testing/SKILL.md", "targetFile": "marketing-ab-testing.md", "remotionIntegrated": true },
+        { "name": "marketing-launch", "sourcePath": "marketing-launch/SKILL.md", "targetFile": "marketing-launch.md", "remotionIntegrated": true },
+        { "name": "marketing-mode", "sourcePath": "marketing-mode/SKILL.md", "targetFile": "marketing-mode.md", "remotionIntegrated": false }
+      ]
+    },
+    "06-monitoring-observability": {
+      "description": "Error tracking, performance monitoring, and MCP debugging",
+      "stage": "TEST",
+      "skills": [
+        { "name": "sentry-ai-monitoring", "sourcePath": "sentry-ai-monitoring/SKILL.md", "targetFile": "sentry-ai-monitoring.md", "remotionIntegrated": true },
+        { "name": "sentry-nextjs-sdk", "sourcePath": "sentry-nextjs-sdk/SKILL.md", "targetFile": "sentry-nextjs-sdk.md", "remotionIntegrated": true },
+        { "name": "mcp-spy", "sourcePath": "mcp-spy/SKILL.md", "targetFile": "mcp-spy.md", "remotionIntegrated": true }
+      ]
+    },
+    "07-cloud-deployment": {
+      "description": "AWS, Vercel, and cloud infrastructure deployment",
+      "stage": "DEPLOY",
+      "skills": [
+        { "name": "aws-agents-deploy", "sourcePath": "aws-agents-deploy/SKILL.md", "targetFile": "aws-agents-deploy.md", "remotionIntegrated": true },
+        { "name": "amazon-bedrock", "sourcePath": "amazon-bedrock/SKILL.md", "targetFile": "amazon-bedrock.md", "remotionIntegrated": true },
+        { "name": "vercel", "sourcePath": "vercel/SKILL.md", "targetFile": "vercel.md", "remotionIntegrated": true }
+      ]
+    },
+    "08-content-design": {
+      "description": "Visual content creation — charts, images, documents, and infographics",
+      "stage": "DESIGN",
+      "skills": [
+        { "name": "charts", "sourcePath": "charts/SKILL.md", "targetFile": "charts.md", "remotionIntegrated": true },
+        { "name": "image-generation", "sourcePath": "image-generation/SKILL.md", "targetFile": "image-generation.md", "remotionIntegrated": true },
+        { "name": "infographic-gen", "sourcePath": "infographic-gen/SKILL.md", "targetFile": "infographic-gen.md", "remotionIntegrated": true },
+        { "name": "docx", "sourcePath": "docx/SKILL.md", "targetFile": "docx.md", "remotionIntegrated": true },
+        { "name": "pdf", "sourcePath": "pdf/SKILL.md", "targetFile": "pdf.md", "remotionIntegrated": true },
+        { "name": "pptx", "sourcePath": "pptx/SKILL.md", "targetFile": "pptx.md", "remotionIntegrated": true }
+      ]
+    }
+  },
+  "pipelineRoutes": {
+    "competitor-intel": {
+      "description": "Scan competitor sites, analyze positioning, generate comparison videos",
+      "stages": ["ACQUIRE", "THINK", "DESIGN", "RENDER", "TEST"],
+      "requiredSkills": ["spider", "firecrawl-scrape", "amazon-bedrock", "council-of-five", "charts", "marketing-ab-testing"]
+    },
+    "product-launch": {
+      "description": "Plan product launch, generate marketing video, A/B test variants",
+      "stages": ["THINK", "DESIGN", "RENDER", "TEST", "DEPLOY"],
+      "requiredSkills": ["marketing-launch", "web-search", "think", "amazon-bedrock", "image-generation", "remotion-video-pro", "sentry-ai-monitoring", "aws-agents-deploy"]
+    },
+    "personalized-videos": {
+      "description": "Batch-generate personalized videos from customer data sources",
+      "stages": ["ACQUIRE", "THINK", "DESIGN", "RENDER", "DEPLOY"],
+      "requiredSkills": ["firecrawl-crawl", "browser-cdp", "amazon-bedrock", "charts", "remotion-video-pro", "sentry-ai-monitoring", "aws-agents-deploy"]
+    },
+    "content-repurpose": {
+      "description": "Repurpose existing content into platform-specific video formats",
+      "stages": ["ACQUIRE", "THINK", "DESIGN", "RENDER", "TEST", "DEPLOY"],
+      "requiredSkills": ["video-understand", "think", "marketing-video", "image-generation", "remotion-video-pro", "marketing-launch"]
+    },
+    "ab-testing": {
+      "description": "Design and execute A/B tests for video creative variants",
+      "stages": ["THINK", "DESIGN", "RENDER", "TEST", "DEPLOY"],
+      "requiredSkills": ["marketing-ab-testing", "council-of-five", "amazon-bedrock", "ui-ux-pro-max", "remotion-video-pro", "sentry-ai-monitoring", "marketing-launch", "charts"]
+    }
+  },
+  "stats": {
+    "totalCategories": 8,
+    "totalSkills": 34,
+    "remotionIntegrated": 34,
+    "pendingIntegration": 0
+  }
+}

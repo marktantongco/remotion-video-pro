@@ -1,137 +1,89 @@
-# Chain-of-Thought Reasoning
+---
+name: chain-of-thought
+description: Activate for complex problems that benefit from explicit, step-by-step reasoning before arriving at a conclusion. Covers multi-step analysis, architecture decisions, debugging with causal reasoning, and tasks where showing the reasoning process is as valuable as the answer.
+remotion_stage: THINK
+integration_type: ai_processing
+pipeline_routes: [competitor-intel, product-launch, personalized-videos, content-repurpose, ab-testing]
+---
 
-## Context
+# Chain of Thought — Remotion Integration Guide
 
-Activate this skill when the user presents a **complex problem** that benefits from explicit, step-by-step reasoning before arriving at a conclusion. This includes:
+## Overview
+Applies explicit step-by-step reasoning to decompose complex video pipeline problems into verifiable sub-steps. Used for debugging blank frames, planning multi-sequence scripts, and validating render logic before committing Lambda resources.
 
-- Multi-step mathematical, logical, or analytical problems
-- Architecture or design decisions with many moving parts
-- Debugging scenarios requiring causal reasoning
-- Any task where showing the reasoning process is as valuable as the answer
-- Situations where the agent might otherwise jump to a wrong conclusion by skipping steps
+## Pipeline Role
+Operates in the **THINK** stage. Consumes a problem statement or script brief. Produces a numbered reasoning chain with cross-checks and confidence ratings that downstream stages use to validate logic before rendering.
 
-**Do not use** for simple factual lookups, greetings, or tasks where the user only wants a direct answer.
+## Integration Pattern
+The webhook-service constructs a structured prompt enforcing the 6-step protocol. Results are parsed into a `ReasoningChain` object for auditability.
 
-## Instructions
+```typescript
+// webhook-service/src/app/api/chain-of-thought/route.ts
+import ZAI from 'z-ai-web-dev-sdk';
 
-### Step 1: Restate the Problem
-Paraphrase the problem in your own words to confirm understanding. Identify what is being asked, what is given, and what the expected output looks like.
+interface ReasoningChain {
+  problem: string;
+  steps: Array<{ stepNumber: number; label: string; content: string }>;
+  conclusion: string;
+  confidence: 'high' | 'medium' | 'low';
+}
 
-### Step 2: Identify and State Assumptions
-List every assumption you are making before reasoning begins. Number them explicitly. If any assumption is uncertain, flag it with `[ASSUMPTION — UNVERIFIED]`.
+const COT_PROMPT = `Solve using 6 steps: 1) Restate problem. 2) List assumptions (flag unverifiable).
+3) Decompose. 4) Solve with intermediate results. 5) Cross-check. 6) Flag uncertainties.
+JSON: { steps: [{stepNumber, label, content}], conclusion, confidence }.`;
 
-### Step 3: Decompose into Sub-Problems
-Break the problem into the smallest discrete steps possible. Each step should be independently verifiable. Assign a number to each step.
+async function runChainOfThought(problem: string): Promise<ReasoningChain> {
+  const zai = await ZAI.create();
+  const c = await zai.chat.completions.create({
+    messages: [
+      { role: 'assistant', content: COT_PROMPT },
+      { role: 'user', content: problem },
+    ], thinking: { type: 'enabled' as const },
+  });
+  return { problem, ...JSON.parse(c.choices[0]?.message?.content || '{}') };
+}
 
-### Step 4: Solve Each Step Explicitly
-For every sub-problem:
-- State what you are calculating or reasoning about
-- Show the work (equations, logic, references)
-- State the intermediate result
-- Verify the result makes sense before moving on
-
-### Step 5: Cross-Check and Validate
-After completing all steps, revisit the chain:
-- Do the intermediate results chain together correctly?
-- Does the final answer satisfy the original problem statement?
-- Run a quick sanity check (e.g., back-of-the-envelope, boundary test)
-
-### Step 6: Flag Uncertainties
-After presenting the final answer, list any remaining uncertainties, caveats, or areas where assumptions could change the result. Rate confidence as High / Medium / Low for each.
-
-## Constraints
-
-1. **Never skip steps.** Every logical jump must be explicit. If you find yourself wanting to skip, add a step explaining why.
-2. **Number every step.** Use `Step N:` format consistently.
-3. **Assumptions come first.** Never reason from hidden assumptions — state them upfront.
-4. **Show your work.** Intermediate calculations, logical derivations, and references must be visible.
-5. **One conclusion per chain.** If the problem branches, start a new numbered chain for each branch.
-6. **Flag, don't hide.** If you are unsure about a step, mark it clearly rather than presenting it as confident.
-7. **No premature answers.** The final answer appears only after Step 5 is complete.
-
-## Examples
-
-### Example 1: Technical Architecture Decision
-
-**User:** "We need to choose between a monolith and microservices for our e-commerce platform with 50k daily users."
-
-**Output:**
-
-```
-Chain-of-Thought Reasoning
-
-Step 1: Restate the Problem
-  We must choose between a monolithic architecture and microservices for an
-  e-commerce platform serving approximately 50,000 daily active users. The
-  decision should optimize for reliability, developer velocity, and future
-  scalability.
-
-Step 2: Assumptions
-  1. [ASSUMPTION] The team size is small-to-medium (3–10 developers).
-  2. [ASSUMPTION] Traffic growth is expected to be steady, not exponential.
-  3. [ASSUMPTION — UNVERIFIED] The platform includes checkout, inventory,
-     user accounts, and a recommendation engine.
-
-Step 3: Decompose
-  3a. Evaluate monolith against our criteria
-  3b. Evaluate microservices against our criteria
-  3c. Compare at current scale (50k DAU)
-  3d. Compare at projected 2x scale
-  3e. Consider team-structure alignment
-
-Step 4: Solve
-  4a. Monolith: simpler deployment, single database, faster initial dev...
-  4b. Microservices: independent scaling per service, fault isolation...
-  4c. At 50k DAU, a well-built monolith handles this comfortably...
-  4d. At 100k DAU, checkout may need independent scaling...
-
-Step 5: Cross-Check
-  The monolith is the stronger fit at current scale. Microservices become
-  justified when a specific service hits a scaling ceiling.
-
-Step 6: Uncertainties
-  - [Medium confidence] Assumption #1 about team size — if the team is
-    larger than 15, microservices gain advantage.
-  - [Low confidence] Future traffic projections are not confirmed.
-
-Recommendation: Start with a modular monolith...
+export async function POST(req: Request) {
+  const { problem, jobId } = await req.json();
+  const chain = await runChainOfThought(problem);
+  await db.renderJob.update({ where: { id: jobId }, data: { reasoningChain: chain } });
+  return Response.json({ success: true, chain });
+}
 ```
 
-### Example 2: Mathematical Problem
+## Data Contract
 
-**User:** "A factory produces 400 units/day. Defect rate is 3%. Each defective unit costs $15 to rework. What is the monthly rework cost?"
+| Input | Output |
+|-------|--------|
+| `problem: string` — issue or script brief to reason through | `ReasoningChain { problem, steps[], conclusion, confidence }` |
+| `jobId: string` — render job for audit trail attachment | Confidence score for downstream gating |
 
-**Output:**
+## Route Participation
 
+| Route | Usage |
+|-------|-------|
+| **competitor-intel** | Step-by-step competitor video strategy decomposition |
+| **product-launch** | Plan multi-sequence launch scripts; validate narrative arc |
+| **personalized-videos** | Verify dynamic props map correctly per segment |
+| **content-repurpose** | Decompose articles into clip boundaries with timing |
+| **ab-testing** | Debug blank-frame variants; trace prop flow through composition |
+
+## Configuration
+
+```bash
+export COT_THINKING_ENABLED="true"     # Optional: extended thinking
+export COT_MIN_CONFIDENCE="medium"     # Optional: gate threshold
 ```
-Chain-of-Thought Reasoning
 
-Step 1: Restate the Problem
-  Calculate total monthly cost of reworking defective units given a daily
-  production of 400 units with a 3% defect rate and a $15 rework cost per
-  defective unit.
+## Example Pipeline Usage
 
-Step 2: Assumptions
-  1. The factory operates 7 days a week (30-day month).
-  2. Defect rate is consistent and independent of production volume.
-
-Step 3: Decompose
-  3a. Calculate daily defective units
-  3b. Calculate daily rework cost
-  3c. Calculate monthly rework cost
-
-Step 4: Solve
-  4a. Daily defective units = 400 × 0.03 = 12 units
-  4b. Daily rework cost = 12 × $15 = $180
-  4c. Monthly rework cost = $180 × 30 = $5,400
-
-Step 5: Cross-Check
-  Sanity: 3% of 400 is ~12. 12 × 30 = 360 defective/month.
-  360 × $15 = $5,400. ✓ Matches.
-
-Step 6: Uncertainties
-  - [Low confidence] Operating days assumption — if 5-day work week,
-    result drops to ~$3,900/month.
-
-Final Answer: $5,400/month under 7-day operations.
+```typescript
+// ab-testing route: debug blank-frame variant before re-render
+async function debugVariantCoT(jobId: string, symptom: string) {
+  const chain = await runChainOfThought(
+    `Blank frames at frame 45-60. Symptom: ${symptom}. Props: ${JSON.stringify(await getJobProps(jobId))}`
+  );
+  if (chain.confidence === 'high') await reEnqueueWithFix(jobId, chain.conclusion);
+  return chain;
+}
 ```

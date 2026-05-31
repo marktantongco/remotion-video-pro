@@ -221,3 +221,40 @@ Stage Summary:
 - pipeline-diagram.png: Professional visualization of the 8-stage pipeline
 - Remotion-Video-Pro-技能整合摘要.docx: Complete Chinese summary (8 sections, tables, bulleted lists)
 - All files verified and accessible in /home/z/my-project/download/
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Comprehensive v3.0 upgrade — pipeline engine, skill rewrites, tooling, README
+
+Work Log:
+- Built Pipeline Orchestration Engine (5 new TypeScript modules in webhook-service/src/):
+  - pipeline.ts (669 lines): PipelineStage enum, PipelineConfig/StageResult/PipelineResult interfaces, createPipeline(), executeStage(), runPipeline() with per-stage error handling (fail-forward model), getPipelineStatus(), listPipelines(), in-memory Map store, 6 stage handlers (ACQUIRE/THINK/DESIGN/RENDER/TEST/DEPLOY), SSRF-protected callback firing
+  - skill-bridge.ts (703 lines): SkillBridge class with 13 typed methods across 5 categories (content ingestion: scrapeUrl/crawlSite/searchWeb; browser automation: captureScreenshot/extractAuthContent; AI intelligence: generateVideoScript/analyzeContent/debateVideoApproach; content design: generateImage/generateChart; marketing: createABTest/getABTestResults; monitoring: trackEvent/checkSystemHealth), all with Zod validation schemas and TODO markers for SDK wiring
+  - pipeline-routes.ts (269 lines): 5 predefined routes (competitor-intel, product-launch, personalized-videos, content-repurpose, ab-testing) with stage sequences, descriptions, required params, example curl commands
+  - api/pipeline/route.ts: POST endpoint (auth, rate-limited 10/min/IP, Zod-validated, SSRF-protected) and GET endpoint for pipeline status
+  - api/pipeline/list/route.ts: GET endpoint with admin auth, filtering, pagination
+- Rewrote 23 skill SKILL.md files with Remotion integration guidance (all 33 now have remotion_stage/integration_type/pipeline_routes frontmatter):
+  - 01-content-ingestion (5 skills): already done in previous session
+  - 02-browser-automation (4 skills): already done in previous session
+  - 03-video-production (5 skills): marketing-video, video, video-generation, video-understand, storyboard-manager
+  - 04-ai-intelligence (5 skills): LLM, VLM, think, council-of-five, chain-of-thought
+  - 05-marketing-analytics (3 skills): marketing-ab-testing, marketing-launch, marketing-mode
+  - 06-monitoring-observability (3 skills): sentry-ai-monitoring, sentry-nextjs-sdk, mcp-spy
+  - 07-cloud-deployment (3 skills): aws-agents-deploy, amazon-bedrock, vercel
+  - 08-content-design (6 skills): charts, image-generation, infographic-gen, docx, pdf, pptx
+- Built skill management tooling:
+  - skill-manifest.json (123 lines): v2.0.0 manifest tracking 34 skills across 8 categories with pipeline routes, sync timestamps, integration status
+  - scripts/sync-skills.sh: 6-mode sync tool (--status, --check, --sync, --skill, --diff, --update-timestamps)
+  - scripts/skill-health-check.sh: 10-check health validator with --json, --fix, --verbose modes
+- Rewrote README.md (1,255 lines) for v3.0 with: badges, architecture diagram, quick start, pipeline routes, skill ecosystem tables, full API reference (15 endpoints), security framework, database schema, pipeline internals, project structure tree, deployment guides, tech stack
+
+Stage Summary:
+- 5 new TypeScript modules (pipeline engine + API endpoints)
+- 33 skill integration guides (all with Remotion-specific frontmatter)
+- 3 tooling files (manifest + 2 bash scripts)
+- 1 comprehensive README (1,255 lines)
+- Pipeline: ACQUIRE -> THINK -> DESIGN -> RENDER -> TEST -> DEPLOY (6 stages)
+- Routes: competitor-intel, product-launch, personalized-videos, content-repurpose, ab-testing
+- SkillBridge: 13 methods, Zod-validated, typed, with TODO markers for SDK wiring
+- All content translated to English

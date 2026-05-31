@@ -1,169 +1,92 @@
 ---
 name: council-of-five
 description: Spawn 5 Opus subagents with randomly-generated distinct personas to debate a problem from multiple angles. Use when exploring UX decisions, architecture choices, or any decision that benefits from diverse perspectives arguing creatively.
+remotion_stage: THINK
+integration_type: ai_processing
+pipeline_routes: [competitor-intel, ab-testing]
 ---
 
-# Council of Five
+# Council of Five — Remotion Integration Guide
 
-Spin up 5 parallel Opus agents, each with a **randomly generated** distinct persona, to explore a problem from radically different angles. They argue, then you synthesize.
+## Overview
+Spawns 5 parallel Opus subagents with unique personas to debate creative direction decisions. Synthesizes divergent viewpoints into a ranked recommendation that the pipeline uses to configure Remotion visual style parameters.
 
-## When to Use
+## Pipeline Role
+Operates in the **THINK** stage. Consumes a design question from upstream stages. Produces a synthesized recommendation with persona scores that downstream DESIGN and RENDER stages use to set color palette, animation style, text density, and pacing.
 
-- UX/design decisions with no obvious "right answer"
-- Architecture trade-offs (speed vs. maintainability, etc.)
-- Naming conventions, API design, workflow design
-- Any decision where "outside the box" thinking helps
+## Integration Pattern
+The webhook-service fans out 5 parallel LLM calls via `z-ai-web-dev-sdk`, each seeded with a distinct persona.
 
-## Random Persona Generation
+```typescript
+// webhook-service/src/app/api/council-of-five/route.ts
+import ZAI from 'z-ai-web-dev-sdk';
 
-**Each invocation generates 5 fresh personas.** Pick randomly from diverse archetypes:
+interface CouncilResult {
+  personas: string[];
+  comparison: Array<{ persona: string; argument: string }>;
+  winningApproach: string;
+}
 
-### Archetype Pool (sample, not exhaustive)
+const PERSONAS = [
+  { name: 'Haiku Master', p: 'Every pixel must earn its place.' },
+  { name: 'Color Theorist', p: 'Meaning lives in hue and contrast.' },
+  { name: 'Lazy User', p: 'I scroll past anything not grabbing me in 0.5s.' },
+  { name: 'Chaos Monkey', p: 'What happens on a broken phone at 2am?' },
+  { name: 'Storyteller', p: 'Every frame must advance the plot.' },
+];
 
-| Category | Example Personas |
-|----------|------------------|
-| **Reduction** | The Minimalist, The Deletionist, The "YAGNI" Zealot, The Haiku Master |
-| **Narrative** | The Storyteller, The Novelist, The Stand-up Comic, The Documentary Filmmaker |
-| **Visual** | The Dashboard Engineer, The Infographic Designer, The Color Theorist, The Whitespace Monk |
-| **Verification** | The Paranoid Auditor, The Penetration Tester, The QA Gremlin, The "Trust No One" Agent |
-| **Behavior** | The UX Researcher, The Cognitive Psychologist, The Lazy User Simulator, The Angry Customer |
-| **Performance** | The Latency Hunter, The Memory Miser, The Big-O Obsessive, The Cache Whisperer |
-| **Accessibility** | The Screen Reader Advocate, The Color Blind Designer, The Keyboard-Only Navigator |
-| **Philosophy** | The Unix Philosopher, The Functional Purist, The "Worse is Better" Advocate, The Pragmatist |
-| **Chaos** | The Edge Case Finder, The Chaos Monkey, The "What If" Catastrophist, The Entropy Embracer |
-| **History** | The Legacy Code Archaeologist, The "We Tried That" Historian, The Pattern Recognizer |
-| **Future** | The 10x Scale Predictor, The Deprecation Prophet, The "Your Future Self" Advocate |
-| **Outsider** | The New Hire, The Non-Technical Stakeholder, The Customer Support Rep, The Intern |
+async function runCouncil(question: string): Promise<CouncilResult> {
+  const zai = await ZAI.create();
+  const debates = await Promise.all(PERSONAS.map(async (p) => {
+    const c = await zai.chat.completions.create({
+      messages: [
+        { role: 'assistant', content: `You are ${p.name}. ${p.p}` },
+        { role: 'user', content: `Debate this video design decision: ${question}` },
+      ], thinking: { type: 'disabled' },
+    });
+    return { persona: p.name, argument: c.choices[0]?.message?.content || '' };
+  }));
+  const synthesis = await synthesizeResults(zai, question, debates);
+  return { personas: PERSONAS.map(p => p.name), comparison: debates, winningApproach: synthesis };
+}
 
-### Generation Rules
-
-1. **Pick 5 personas from different categories** (no two from same category)
-2. **Invent new ones** if the pool feels stale—creativity encouraged
-3. **Name them vividly** (e.g., "The Haiku Master" not "The Brevity Person")
-4. **Give each a one-sentence philosophy** before they argue
-
-## Invocation
-
-### Basic
-
-```
-I need a council of five to debate [your problem/decision]
-```
-
-### With Context
-
-```
-Run a council-of-five on this UX problem:
-[paste the current approach]
-
-What I care about: [your priority, e.g., "clarity over completeness"]
+export async function POST(req: Request) {
+  const { question, jobId } = await req.json();
+  const result = await runCouncil(question);
+  await db.renderJob.update({ where: { id: jobId }, data: { councilDecision: result } });
+  return Response.json({ success: true, result });
+}
 ```
 
-### Seeded with a specific angle
+## Data Contract
 
-```
-Council of five, but make sure one persona is security-focused
-```
+| Input | Output |
+|-------|--------|
+| `question: string` — creative decision to debate | `CouncilResult { personas, comparison, winningApproach }` |
+| `jobId: string` — render job for metadata | Ranked recommendation with persona comparison |
 
-## How It Works
+## Route Participation
 
-1. **Generate**: Randomly select 5 personas from different categories (or invent new ones)
-2. **Announce**: Tell the user which 5 personas were selected and their philosophies
-3. **Launch**: 5 Opus subagents spin up in parallel (background tasks)
-4. **Explore**: Each argues from their persona's angle, proposing alternatives
-5. **Synthesize**: Results are gathered and presented as a comparison table
-6. **Decide**: User picks an approach (or hybrid)
+| Route | Usage |
+|-------|-------|
+| **competitor-intel** | Debate visual approach — minimalist vs maximalist motion graphics |
+| **ab-testing** | Each persona becomes a variant hypothesis for A/B testing |
 
-## Prompt Template for Each Agent
+## Configuration
 
-```
-You are [RANDOMLY GENERATED PERSONA NAME].
-
-Your core philosophy: [generate a one-sentence worldview that fits this persona]
-
-The user is evaluating: [problem description]
-
-Current approach:
-[paste current solution]
-
-Your task:
-1. Critique the current approach from your unique angle
-2. Propose an alternative that embodies your philosophy
-3. Give a concrete example of your approach in action
-4. Acknowledge one weakness of your approach
-
-Be creative. Be opinionated. Argue your position strongly.
-Push boundaries—surprise the user with an angle they haven't considered.
+```bash
+export ANTHROPIC_API_KEY="your-key"   # Required
+export COUNCIL_TIMEOUT_MS="120000"     # full round timeout
 ```
 
-## Output Format
+## Example Pipeline Usage
 
-After all agents complete, present:
-
-1. **Quick comparison table** (persona | core argument | proposed format)
-2. **Synthesis** (where they agree, where they clash)
-3. **Hybrid suggestion** (if applicable)
-4. **Question to user**: "What resonates?"
-
-## Example Session
-
-**User**: "Council of five on my error message format"
-
-**Generated personas**:
-1. **The Haiku Master** (Reduction) — "If it can't fit in 17 syllables, it's not essential."
-2. **The Stand-up Comic** (Narrative) — "If they're not smiling, they're not listening."
-3. **The Color Theorist** (Visual) — "Meaning lives in hue and contrast, not words."
-4. **The Angry Customer** (Behavior) — "I'm already frustrated. Don't make it worse."
-5. **The Chaos Monkey** (Chaos) — "What happens when this fails at 3am on a holiday?"
-
-**Result**:
-| Persona | Argument | Proposal |
-|---------|----------|----------|
-| Haiku Master | "Too many words" | `Auth timed out. / Server took too long. / Try once more?` |
-| Stand-up Comic | "Errors are traumatic" | "Well, that didn't work. The server ghosted us. Retry?" |
-| Color Theorist | "Red isn't enough" | Amber background (warning, not failure), pulsing border |
-| Angry Customer | "I don't care WHY" | Big retry button, tiny "details" link, no essay |
-| Chaos Monkey | "What if retry also fails?" | Exponential backoff + "Contact support" after 3 attempts |
-
-## Tips
-
-- **Be specific** about what you care about (speed? clarity? memorability?)
-- **Provide the current approach** so personas can critique something concrete
-- **Ask for hybrids** if multiple approaches resonate
-- **Request a reroll** if the random personas don't fit your problem domain
-- **Seed with one persona** if you want to ensure a specific angle is covered
-
-## Controlling Randomness
-
-**Full random** (default):
+```typescript
+// ab-testing route: each persona becomes a variant
+async function councilDrivenABTest(brief: string) {
+  const council = await runCouncil(`What visual style for: ${brief}?`);
+  const variants = council.comparison.map((d, i) => ({
+    name: `variant-${i}-${council.personas[i]}`,
+  }));
+  return createABTest({ name: 'council-style', variants }); }
 ```
-Council of five on my API design
-```
-
-**Seeded** (guarantee one persona, randomize the rest):
-```
-Council of five on my auth flow, but make sure one is a Security persona
-```
-
-**Category bias** (weight toward certain categories):
-```
-Council of five on my mobile app, bias toward Behavior and Accessibility categories
-```
-
-**Reroll**:
-```
-Those personas didn't fit—reroll with completely different ones
-```
-
-## Inventing New Personas
-
-Don't limit yourself to the pool. Invent wild ones:
-
-- **The Time Traveler from 2035** — "This will look embarrassing in 10 years."
-- **The Toddler** — "But WHY? But WHY? But WHY?"
-- **The Poet Laureate** — "Does it have rhythm? Does it breathe?"
-- **The Lawyer** — "What happens when someone sues over this?"
-- **The Sleep-Deprived On-Call Engineer** — "Will I understand this at 3am?"
-- **The Competitor's Product Manager** — "How would I exploit this weakness?"
-
-The weirder the persona, the more unexpected the insight.

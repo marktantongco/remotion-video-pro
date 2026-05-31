@@ -2,57 +2,96 @@
 name: firecrawl-crawl
 description: |
   Bulk extract content from an entire website or site section. Use this skill when the user wants to crawl a site, extract all pages from a docs section, bulk-scrape multiple pages following links, or says "crawl", "get all the pages", "extract everything under /docs", "bulk extract", or needs content from many pages on the same site. Handles depth limits, path filtering, and concurrent extraction.
-allowed-tools:
-  - Bash(firecrawl *)
-  - Bash(npx firecrawl *)
+remotion_stage: ACQUIRE
+integration_type: data_source
+pipeline_routes: [competitor-intel, product-launch, content-repurpose]
 ---
 
-# firecrawl crawl
+# Firecrawl Crawl — Remotion Integration Guide
 
-Bulk extract content from a website. Crawls pages following links up to a depth/limit.
+## Overview
+Bulk-extracts content from entire websites or site sections, enabling batch video generation from documentation sites, knowledge bases, or product catalogs.
 
-## When to use
+## Pipeline Role
+Operates in the **ACQUIRE** stage. Produces an array of `{ url, title, markdown }` objects that feed into batch rendering pipelines (Core Rule 10).
 
-- You need content from many pages on a site (e.g., all `/docs/`)
-- You want to extract an entire site section
-- Step 4 in the [workflow escalation pattern](firecrawl-cli): search → scrape → map → **crawl** → interact
+## Integration Pattern
 
-## Quick start
+```typescript
+// webhook-service/src/lib/content-ingestion.ts
+import { execFileSync } from 'child_process';
 
-```bash
-# Crawl a docs section
-firecrawl crawl "<url>" --include-paths /docs --limit 50 --wait -o .firecrawl/crawl.json
+interface CrawlResult {
+  url: string;
+  title: string;
+  markdown: string;
+}
 
-# Full crawl with depth limit
-firecrawl crawl "<url>" --max-depth 3 --wait --progress -o .firecrawl/crawl.json
+async function crawlSiteForBatch(
+  baseUrl: string,
+  includePaths: string,
+  limit: number = 50
+): Promise<CrawlResult[]> {
+  const outputPath = `/tmp/crawl-${Date.now()}.json`;
+  execFileSync(
+    `firecrawl crawl "${baseUrl}" --include-paths ${includePaths} --limit ${limit} --wait --progress -o ${outputPath}`,
+    { timeout: 120000 }
+  );
 
-# Check status of a running crawl
-firecrawl crawl <job-id>
+  const data = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+  return data.map((page: any) => ({
+    url: page.url,
+    title: page.title || extractTitle(page.markdown),
+    markdown: page.markdown,
+  }));
+}
+
+// Batch render each page as a video (Core Rule 10)
+async function crawlAndBatchRender(
+  baseUrl: string,
+  compositionId: string
+) {
+  const pages = await crawlSiteForBatch(baseUrl, '/docs', 50);
+
+  for (const page of pages) {
+    const props = await transformToVideoProps(page);
+    await renderQueue.add('render', {
+      compositionId,
+      inputProps: props,
+      metadata: { sourceUrl: page.url },
+    });
+  }
+}
 ```
 
-## Options
+## Data Contract
 
-| Option                    | Description                                 |
-| ------------------------- | ------------------------------------------- |
-| `--wait`                  | Wait for crawl to complete before returning |
-| `--progress`              | Show progress while waiting                 |
-| `--limit <n>`             | Max pages to crawl                          |
-| `--max-depth <n>`         | Max link depth to follow                    |
-| `--include-paths <paths>` | Only crawl URLs matching these paths        |
-| `--exclude-paths <paths>` | Skip URLs matching these paths              |
-| `--delay <ms>`            | Delay between requests                      |
-| `--max-concurrency <n>`   | Max parallel crawl workers                  |
-| `--pretty`                | Pretty print JSON output                    |
-| `-o, --output <path>`     | Output file path                            |
+| Input | Output |
+|-------|--------|
+| `baseUrl`, `includePaths`, `limit` | `CrawlResult[]` — array of `{ url, title, markdown }` |
+| Site section URL + crawl config | Up to N pages of structured content |
 
-## Tips
+## Route Participation
 
-- Always use `--wait` when you need the results immediately. Without it, crawl returns a job ID for async polling.
-- Use `--include-paths` to scope the crawl — don't crawl an entire site when you only need one section.
-- Crawl consumes credits per page. Check `firecrawl credit-usage` before large crawls.
+| Route | Usage |
+|-------|-------|
+| **competitor-intel** | Crawl competitor entire docs → generate tutorial comparison videos |
+| **product-launch** | Crawl changelog directory → auto-generate release videos for each entry |
+| **content-repurpose** | Crawl blog section → batch-repurpose articles as short-form videos |
 
-## See also
+## Configuration
 
-- [firecrawl-scrape](../firecrawl-scrape/SKILL.md) — scrape individual pages
-- [firecrawl-map](../firecrawl-map/SKILL.md) — discover URLs before deciding to crawl
-- [firecrawl-download](../firecrawl-download/SKILL.md) — download site to local files (uses map + scrape)
+```bash
+export FIRECRAWL_API_KEY="fc-..."
+npm install -g firecrawl-scraper
+# Monitor credit usage before large crawls
+firecrawl credit-usage
+```
+
+## Example Pipeline Usage
+
+```typescript
+// product-launch route: crawl docs → batch render tutorial videos
+const docs = await crawlSiteForBatch('https://docs.example.com', '/api', 30);
+await batchRender('ApiTutorial', docs.map(d => transformToVideoProps(d)));
+```
