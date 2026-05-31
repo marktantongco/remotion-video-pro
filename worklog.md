@@ -290,3 +290,33 @@ Stage Summary:
 - Complete v3.0 ZIP: 570KB at /home/z/my-project/download/remotion-video-pro.zip
 - Local git commit ready: ff13526 (needs push to origin with user credentials)
 - Total API endpoints: 15 (render, batch, stripe-webhook, composition/activate, pipeline, pipeline/list, ab, ab/[id], analytics/track, page)
+---
+Task ID: 7
+Agent: Main Agent
+Task: Push to GitHub, deploy to Vercel, set env vars, attempt Prisma DB push
+
+Work Log:
+- Pushed commit ff13526 to GitHub (rebased 13 commits on diverged remote)
+- Fixed 10 TypeScript build errors:
+  - Prisma.InputJsonValue casts for JSON fields (props, stripeMetadata)
+  - Stripe API version 2024-04-10 → 2023-10-16 (matches stripe@14)
+  - Replaced immutable sessions.update() with single-step HMAC creation
+  - timingSafeEqual import in hmac.ts (was crypto.global)
+  - AwsRegion type cast in render.ts
+  - Missing Prisma import and verifyAdminSecret import in render/route.ts
+  - Missing RenderJob→RenderAnalytics reverse relation in schema
+- Fixed Prisma client not regenerating on Vercel (added "prisma generate" to build script)
+- Set 7 environment variables on Vercel via CLI:
+  - DATABASE_URL (Nhost PostgreSQL)
+  - WEBHOOK_SECRET, ADMIN_SECRET, ANALYTICS_TOKEN
+  - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CHECKOUT_HMAC_SECRET, REDIS_URL
+- Deployed to Vercel production (3rd attempt succeeded after TS fixes + build script fix)
+- Prisma DB push failed: container DNS can't resolve Nhost hostname (network restriction)
+- Verified deployment: 200 OK, all 7 security headers present, all 11 routes registered
+
+Stage Summary:
+- GitHub: https://github.com/marktantongco/remotion-video-pro (pushed 4 commits: ff13526, 12ce273, b7c52a5, 41674bd)
+- Vercel: https://webhook-service-ten.vercel.app (production, build passing)
+- All 7 security headers verified (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy)
+- 11 API routes deployed: render, batch, stripe-webhook, composition/activate, pipeline, pipeline/list, ab, ab/[id], analytics/track, page, _not-found
+- DB push pending: must run from local machine with DATABASE_URL="postgresql://postgres:Marky1986!@yriegmcpbwybkgiyruqf.db.ap-southeast-1.nhost.run:5432/yriegmcpbwybkgiyruqf?sslmode=require"
