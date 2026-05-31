@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "browser-cdp": {
+      "source": "worldwonderer/oh-story-claudecode",
+      "sourceType": "github",
+      "skillPath": "skills/browser-cdp/SKILL.md",
+      "computedHash": "46366533707368e9f451a8bb790db40766d7cd9f89a11b8eff68aa461cb567d8"
+    },
+    "fetch": {
+      "source": "browserbase/skills",
+      "sourceType": "github",
+      "skillPath": "skills/fetch/SKILL.md",
+      "computedHash": "b9687cae8c2daf889b3b5c1ef8282822acdf27de49118f25917011ed0dd1799a"
+    },
+    "firecrawl-scrape": {
+      "source": "firecrawl/cli",
+      "sourceType": "github",
+      "skillPath": "skills/firecrawl-scrape/SKILL.md",
+      "computedHash": "84247f4175e5ab6104aa2c4ff4038f1eae98d992a253755ca18d3b62e28a7b5c"
+    },
+    "video": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "skillPath": "skills/video/SKILL.md",
+      "computedHash": "8286d39be8d86f9fc1c39b3c340cdebcf9a490f7606ffde566572baa163b1fe7"
+    }
+  }
+}

@@ -131,3 +131,23 @@ Stage Summary:
 - All 6 security vulnerabilities fixed and verified
 - All endpoints behind auth with rate limiting
 - Full A/B testing framework with chi-square significance testing
+---
+Task ID: 1
+Agent: Main Agent
+Task: Install custom mix of skills from skills.sh trending + opencode-accomplishments registries
+
+Work Log:
+- Audited existing skills: 75 pre-installed in /home/z/my-project/skills/
+- Browsed registries: skills.sh/trending (607K+ installs across 607 skills), opencode-accomplishments (48 skills in 10 categories), inprotocol.md (SILENT PROTOCOL agent architecture)
+- Used `npx skills find` to search video, browser, security, scrape, image, mcp, deploy, ai-agent queries
+- Cloned 6 repos: firecrawl/cli, coreyhaines31/marketingskills, worldwonderer/oh-story-claudecode, browserbase/skills, getsentry/sentry-for-ai, aws/agent-toolkit-for-aws, johnlindquist/claude
+- `npx skills add` timed out repeatedly (network issue), used manual git clone + cp approach instead
+- Installed 16 curated skills across 6 categories
+- Verified all 16 have valid SKILL.md with proper YAML frontmatter
+- Final count: 91 skills total (75 original + 16 new, with 7 name merges into existing skills)
+
+Stage Summary:
+- 16 skills installed from 6 external repos
+- 9 brand-new skills detected by `npx skills ls`: firecrawl-scrape, firecrawl-crawl, browser-cdp, amazon-bedrock, sentry-nextjs-sdk, mcp-spy, spider, think, council-of-five
+- 7 skills merged/upgraded existing ones: marketing-video (→video), marketing-ab-testing (→ab-testing), marketing-launch (→launch), browserbase-fetch (→fetch), browserbase-autobrowse (→autobrowse), sentry-ai-monitoring (→sentry-setup-ai-monitoring), aws-agents-deploy (→agents-deploy)
+- Total project skills: 91
